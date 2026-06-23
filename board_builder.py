@@ -114,25 +114,33 @@ def render_map_slide(pptx_path, slide_idx, work_dir):
     map_pptx = os.path.join(work_dir, "map_slide.pptx")
     prs_new.save(map_pptx)
 
-    # Convert to PDF
+    # Convert directly to PNG (better layout fidelity than PDF route)
+    subprocess.run(
+        ["soffice", "--headless", "--convert-to", "png", map_pptx, "--outdir", work_dir],
+        capture_output=True, timeout=60
+    )
+
+    map_png = os.path.join(work_dir, "map_slide.png")
+    jpg = os.path.join(work_dir, "map_slide.jpg")
+    if os.path.exists(map_png):
+        img = Image.open(map_png).convert("RGB")
+        img.save(jpg, "JPEG", quality=92)
+        return jpg
+
+    # Fallback: PDF → pdftoppm
     subprocess.run(
         ["soffice", "--headless", "--convert-to", "pdf", map_pptx, "--outdir", work_dir],
         capture_output=True, timeout=60
     )
-
     map_pdf = os.path.join(work_dir, "map_slide.pdf")
     if not os.path.exists(map_pdf):
         return None
-
-    # Render to PPM then JPG
     subprocess.run(
         ["pdftoppm", "-r", "250", "-f", "1", "-l", "1",
          map_pdf, os.path.join(work_dir, "map")],
         capture_output=True, timeout=30
     )
-
     ppm = os.path.join(work_dir, "map-1.ppm")
-    jpg = os.path.join(work_dir, "map_slide.jpg")
     if os.path.exists(ppm):
         img = Image.open(ppm)
         img.save(jpg, "JPEG", quality=92)
@@ -229,12 +237,11 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
         wide = sorted(candidates, key=lambda x: x[1]/max(x[2],1), reverse=True)
         return tall[0][0], wide[0][0]
 
-    # 4. Extract map image directly (more reliable than LibreOffice rendering)
-    print("Extracting map image...")
-    map_jpg = find_img(cfg["map"])
+    # 4. Render map slide via LibreOffice
+    print("Rendering map slide...")
+    map_jpg = render_map_slide(pptx_path, cfg["map"], work_dir)
     if not map_jpg:
-        # Fallback: render via LibreOffice
-        map_jpg = render_map_slide(pptx_path, cfg["map"], work_dir)
+        map_jpg = find_img(cfg["map"])
 
     # 5. Get title
     title1, title2 = get_title_from_pptx(pptx_path)
