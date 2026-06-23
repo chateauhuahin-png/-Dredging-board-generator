@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ระบบสร้างบอร์ดชี้แจง - นพค.43</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Sarabun', 'TH Sarabun PSK', Arial, sans-serif;
+    background: #0b1464;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+  .card {
+    background: white;
+    border-radius: 12px;
+    padding: 40px;
+    width: 100%;
+    max-width: 600px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  }
+  h1 {
+    color: #0b1464;
+    font-size: 24px;
+    text-align: center;
+    margin-bottom: 8px;
+  }
+  .subtitle {
+    color: #666;
+    text-align: center;
+    font-size: 14px;
+    margin-bottom: 32px;
+  }
+  .form-group {
+    margin-bottom: 20px;
+  }
+  label {
+    display: block;
+    font-weight: bold;
+    color: #0b1464;
+    margin-bottom: 6px;
+    font-size: 15px;
+  }
+  .required { color: #e53e3e; }
+  .optional { color: #888; font-weight: normal; font-size: 13px; }
+  input[type="file"] {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px dashed #cbd5e0;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: border-color 0.2s;
+  }
+  input[type="file"]:hover { border-color: #0b1464; }
+  .photo-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+  .photo-item label { font-size: 13px; }
+  .btn {
+    width: 100%;
+    padding: 14px;
+    background: #0b1464;
+    color: #ffd700;
+    border: none;
+    border-radius: 8px;
+    font-size: 18px;
+    font-weight: bold;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: background 0.2s;
+  }
+  .btn:hover { background: #1a2a9b; }
+  .btn:disabled { background: #a0aec0; cursor: not-allowed; }
+  .status {
+    margin-top: 20px;
+    padding: 16px;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 16px;
+    display: none;
+  }
+  .status.loading { background: #ebf8ff; color: #2b6cb0; display: block; }
+  .status.success { background: #f0fff4; color: #276749; display: block; }
+  .status.error   { background: #fff5f5; color: #c53030; display: block; }
+  .download-btn {
+    display: inline-block;
+    margin-top: 12px;
+    padding: 10px 24px;
+    background: #276749;
+    color: white;
+    border-radius: 6px;
+    text-decoration: none;
+    font-weight: bold;
+    font-size: 16px;
+  }
+  .divider {
+    border: none;
+    border-top: 1px solid #e2e8f0;
+    margin: 24px 0;
+  }
+  .spinner {
+    display: inline-block;
+    width: 20px; height: 20px;
+    border: 3px solid #bee3f8;
+    border-top-color: #2b6cb0;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    vertical-align: middle;
+    margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>🗂️ ระบบสร้างบอร์ดชี้แจง</h1>
+  <p class="subtitle">นพค.43 | ความละเอียด 150 DPI พร้อมพิมพ์ขนาด 120×80 cm</p>
+
+  <form id="boardForm">
+
+    <div class="form-group">
+      <label>ไฟล์ PowerPoint <span class="required">*</span></label>
+      <input type="file" name="pptx" accept=".pptx" required>
+    </div>
+
+    <hr class="divider">
+
+    <div class="form-group">
+      <label>รูปภาพสถานที่ <span class="required">*</span></label>
+      <div class="photo-grid">
+        <div class="photo-item">
+          <label>ก่อนปฏิบัติงาน</label>
+          <input type="file" name="photo_before" accept="image/*">
+        </div>
+        <div class="photo-item">
+          <label>ระหว่างปฏิบัติงาน</label>
+          <input type="file" name="photo_during" accept="image/*">
+        </div>
+        <div class="photo-item">
+          <label>หลังปฏิบัติงาน</label>
+          <input type="file" name="photo_after" accept="image/*">
+        </div>
+      </div>
+    </div>
+
+    <hr class="divider">
+
+    <div class="form-group">
+      <label>โลโก้หน่วย <span class="optional">(ไม่บังคับ)</span></label>
+      <input type="file" name="logo" accept="image/*">
+    </div>
+
+    <button type="submit" class="btn" id="submitBtn">
+      สร้างบอร์ดชี้แจง
+    </button>
+  </form>
+
+  <div class="status" id="status"></div>
+</div>
+
+<script>
+document.getElementById("boardForm").addEventListener("submit", async function(e) {
+  e.preventDefault();
+
+  const btn = document.getElementById("submitBtn");
+  const statusEl = document.getElementById("status");
+
+  btn.disabled = true;
+  statusEl.className = "status loading";
+  statusEl.innerHTML = '<span class="spinner"></span>กำลังสร้างบอร์ด... อาจใช้เวลา 1-2 นาที';
+
+  try {
+    const formData = new FormData(this);
+    const res = await fetch("/generate", { method: "POST", body: formData });
+    const data = await res.json();
+
+    if (res.ok && data.url) {
+      statusEl.className = "status success";
+      statusEl.innerHTML = `✅ สร้างบอร์ดสำเร็จ!<br>
+        <a class="download-btn" href="${data.url}">⬇️ ดาวน์โหลด JPG</a>`;
+    } else {
+      statusEl.className = "status error";
+      statusEl.innerHTML = `❌ เกิดข้อผิดพลาด: ${data.error || "ไม่ทราบสาเหตุ"}`;
+    }
+  } catch (err) {
+    statusEl.className = "status error";
+    statusEl.innerHTML = `❌ เกิดข้อผิดพลาด: ${err.message}`;
+  } finally {
+    btn.disabled = false;
+  }
+});
+</script>
+</body>
+</html>
