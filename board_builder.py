@@ -83,69 +83,53 @@ def extract_media(pptx_path, out_dir, slide_indices):
 
 
 def render_map_slide(pptx_path, slide_idx, work_dir):
-    """Render single slide (map) to JPG via LibreOffice + pdftoppm"""
-    # Extract just slide N as 1-slide PPTX
-    prs_full = Presentation(pptx_path)
-    slide = prs_full.slides[slide_idx - 1]
+    """Render slide to JPG using PIL — exact EMU coordinates, no LibreOffice"""
+    import io as _io
 
-    prs_new = Presentation()
-    prs_new.slide_width  = prs_full.slide_width
-    prs_new.slide_height = prs_full.slide_height
+    prs   = Presentation(pptx_path)
+    slide = prs.slides[slide_idx - 1]
+    sw    = prs.slide_width   # EMU
+    sh    = prs.slide_height  # EMU
 
-    # Remove default blank slide if present (python-pptx version dependent)
-    if len(prs_new.slides._sldIdLst) > 0:
-        blank = prs_new.slides._sldIdLst[0]
-        prs_new.slides._sldIdLst.remove(blank)
+    OUT_W  = 3000
+    scale  = OUT_W / sw
+    OUT_H  = int(sh * scale)
 
-    slide_layout = prs_new.slide_layouts[6]
-    new_slide = prs_new.slides.add_slide(slide_layout)
-    sp_tree = new_slide.shapes._spTree
-    for child in list(sp_tree):
-        sp_tree.remove(child)
-    for child in slide.shapes._spTree:
-        sp_tree.append(copy.deepcopy(child))
-    for rel in slide.part.rels.values():
-        if "image" in rel.reltype:
+    canvas = Image.new("RGB", (OUT_W, OUT_H), (255, 255, 255))
+
+    def px(emu):
+        return int((emu or 0) * scale)
+
+    def paste_pictures(shapes, dx=0, dy=0):
+        for shape in shapes:
             try:
-                new_slide.part.relate_to(rel.target_part, rel.reltype)
+                x = dx + px(shape.left)
+                y = dy + px(shape.top)
+                w = px(shape.width)
+                h = px(shape.height)
             except Exception:
-                pass
+                continue
+            if w <= 0 or h <= 0:
+                continue
 
-    map_pptx = os.path.join(work_dir, "map_slide.pptx")
-    prs_new.save(map_pptx)
+            if shape.shape_type == 13:          # Picture
+                try:
+                    img = Image.open(_io.BytesIO(shape.image.blob)).convert("RGBA")
+                    img = img.resize((w, h), Image.LANCZOS)
+                    bg  = Image.new("RGB", (w, h), (255, 255, 255))
+                    bg.paste(img, mask=img.split()[3])
+                    canvas.paste(bg, (x, y))
+                except Exception as e:
+                    print(f"  pic error: {e}")
 
-    # Convert directly to PNG (better layout fidelity than PDF route)
-    subprocess.run(
-        ["soffice", "--headless", "--convert-to", "png", map_pptx, "--outdir", work_dir],
-        capture_output=True, timeout=60
-    )
+            elif shape.shape_type == 6:          # Group — recurse with offset
+                paste_pictures(shape.shapes, x, y)
 
-    map_png = os.path.join(work_dir, "map_slide.png")
+    paste_pictures(slide.shapes)
+
     jpg = os.path.join(work_dir, "map_slide.jpg")
-    if os.path.exists(map_png):
-        img = Image.open(map_png).convert("RGB")
-        img.save(jpg, "JPEG", quality=92)
-        return jpg
-
-    # Fallback: PDF → pdftoppm
-    subprocess.run(
-        ["soffice", "--headless", "--convert-to", "pdf", map_pptx, "--outdir", work_dir],
-        capture_output=True, timeout=60
-    )
-    map_pdf = os.path.join(work_dir, "map_slide.pdf")
-    if not os.path.exists(map_pdf):
-        return None
-    subprocess.run(
-        ["pdftoppm", "-r", "250", "-f", "1", "-l", "1",
-         map_pdf, os.path.join(work_dir, "map")],
-        capture_output=True, timeout=30
-    )
-    ppm = os.path.join(work_dir, "map-1.ppm")
-    if os.path.exists(ppm):
-        img = Image.open(ppm)
-        img.save(jpg, "JPEG", quality=92)
-        return jpg
-    return None
+    canvas.save(jpg, "JPEG", quality=92)
+    return jpg
 
 
 def get_title_from_pptx(pptx_path):
