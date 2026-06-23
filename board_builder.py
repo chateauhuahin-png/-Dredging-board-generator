@@ -115,13 +115,11 @@ def extract_single_slide(pptx_path, slide_idx, work_dir):
 
 def render_map_slide(pptx_path, slide_idx, work_dir):
     """
-    Composite render:
-      Layer 1 (PIL)         — pictures at exact EMU positions
-      Layer 2 (LibreOffice) — text + lines only (pictures removed from PPTX)
-      Final = multiply(Layer1, Layer2)  →  white in L2 is transparent
+    Composite render (equivalent to PowerPoint 'Paste as Picture'):
+      Step 1: LibreOffice renders full slide → base (text/lines correct, images may be wrong)
+      Step 2: PIL pastes images at exact EMU positions ON TOP → overrides wrong LibreOffice images
     """
     import io as _io
-    from PIL import ImageChops
 
     single_pptx, sw, sh = extract_single_slide(pptx_path, slide_idx, work_dir)
 
@@ -129,10 +127,20 @@ def render_map_slide(pptx_path, slide_idx, work_dir):
     scale = OUT_W / sw
     OUT_H = int(sh * scale)
 
-    # ── Layer 1: PIL pictures at correct positions ──────────────────────────
+    # ── Step 1: LibreOffice renders full slide ──────────────────────────────
+    subprocess.run(
+        ["soffice", "--headless", "--convert-to", "png", single_pptx, "--outdir", work_dir],
+        capture_output=True, timeout=60
+    )
+    lo_png = os.path.join(work_dir, "map_single.png")
+    if os.path.exists(lo_png):
+        base = Image.open(lo_png).convert("RGB").resize((OUT_W, OUT_H), Image.LANCZOS)
+    else:
+        base = Image.new("RGB", (OUT_W, OUT_H), (255, 255, 255))
+
+    # ── Step 2: PIL pastes images at correct EMU positions on top ──────────
     prs   = Presentation(single_pptx)
     slide = prs.slides[0]
-    img_layer = Image.new("RGB", (OUT_W, OUT_H), (255, 255, 255))
 
     def grp_transform(grp):
         try:
@@ -148,21 +156,21 @@ def render_map_slide(pptx_path, slide_idx, work_dir):
     def paste_pics(shapes, ox=0, oy=0, sx=1.0, sy=1.0, cox=0, coy=0):
         for s in shapes:
             try:
-                ax = ox + (( s.left  or 0) - cox) * sx
-                ay = oy + (( s.top   or 0) - coy) * sy
-                aw = ( s.width  or 0) * sx
-                ah = ( s.height or 0) * sy
+                ax = ox + ((s.left  or 0) - cox) * sx
+                ay = oy + ((s.top   or 0) - coy) * sy
+                aw = (s.width  or 0) * sx
+                ah = (s.height or 0) * sy
             except Exception:
                 continue
-            px, py = int(ax*scale), int(ay*scale)
-            pw, ph = int(aw*scale), int(ah*scale)
+            px_, py_ = int(ax*scale), int(ay*scale)
+            pw,  ph  = int(aw*scale), int(ah*scale)
             if s.shape_type == 13 and pw > 0 and ph > 0:
                 try:
                     im = Image.open(_io.BytesIO(s.image.blob)).convert("RGBA")
                     im = im.resize((pw, ph), Image.LANCZOS)
                     bg = Image.new("RGB", (pw, ph), (255, 255, 255))
                     bg.paste(im, mask=im.split()[3])
-                    img_layer.paste(bg, (px, py))
+                    base.paste(bg, (px_, py_))
                     del im, bg
                 except Exception as e:
                     print(f"  pic: {e}")
@@ -173,42 +181,8 @@ def render_map_slide(pptx_path, slide_idx, work_dir):
     paste_pics(slide.shapes)
     del prs
 
-    # ── Layer 2: LibreOffice renders text + lines (no pictures) ────────────
-    prs2  = Presentation(single_pptx)
-    slide2 = prs2.slides[0]
-
-    def remove_pics(container):
-        to_del = []
-        for el in container:
-            tag = el.tag.split('}')[-1] if '}' in el.tag else el.tag
-            if tag == 'pic':
-                to_del.append(el)
-            elif tag == 'grpSp':
-                remove_pics(el)
-        for el in to_del:
-            container.remove(el)
-
-    remove_pics(slide2.shapes._spTree)
-    text_pptx = os.path.join(work_dir, "map_text.pptx")
-    prs2.save(text_pptx)
-    del prs2
-
-    subprocess.run(
-        ["soffice", "--headless", "--convert-to", "png", text_pptx, "--outdir", work_dir],
-        capture_output=True, timeout=60
-    )
-    text_png = os.path.join(work_dir, "map_text.png")
-
-    # ── Composite ────────────────────────────────────────────────────────────
-    if os.path.exists(text_png):
-        txt = Image.open(text_png).convert("RGB").resize((OUT_W, OUT_H), Image.LANCZOS)
-        # multiply: white(255) in txt → preserves img_layer; dark text/lines → shows on top
-        result = ImageChops.multiply(img_layer, txt)
-    else:
-        result = img_layer
-
     jpg = os.path.join(work_dir, "map_slide.jpg")
-    result.save(jpg, "JPEG", quality=92)
+    base.save(jpg, "JPEG", quality=92)
     return jpg
 
 
