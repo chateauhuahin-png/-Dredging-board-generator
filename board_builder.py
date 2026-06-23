@@ -272,7 +272,7 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
     bb2 = draw.textbbox((0,0), title2, font=f2)
     draw.text((cx-(bb1[2]-bb1[0])//2, MG+70),  title1, font=f1, fill=GOLD)
     draw.text((cx-(bb2[2]-bb2[0])//2, MG+195), title2, font=f2, fill=WHITE)
-    draw.text((W-MG-400, MG+HDR-56), "นพค.43", font=fnt(44), fill=WHITE)
+    draw.text((W-MG-400, MG+HDR-56), "นทพ.", font=fnt(44), fill=WHITE)
 
     # Left column
     boq_h = int(CONH * 0.54)
