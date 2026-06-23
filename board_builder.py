@@ -92,10 +92,10 @@ def render_map_slide(pptx_path, slide_idx, work_dir):
     prs_new.slide_width  = prs_full.slide_width
     prs_new.slide_height = prs_full.slide_height
 
-    # Remove default blank slide
-    rId = prs_new.slides._sldIdLst[0].get("r:id")
-    blank = prs_new.slides._sldIdLst[0]
-    prs_new.slides._sldIdLst.remove(blank)
+    # Remove default blank slide if present (python-pptx version dependent)
+    if len(prs_new.slides._sldIdLst) > 0:
+        blank = prs_new.slides._sldIdLst[0]
+        prs_new.slides._sldIdLst.remove(blank)
 
     slide_layout = prs_new.slide_layouts[6]
     new_slide = prs_new.slides.add_slide(slide_layout)
