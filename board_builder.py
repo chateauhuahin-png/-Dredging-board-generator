@@ -127,9 +127,15 @@ def render_map_slide(pptx_path, slide_idx, work_dir):
     scale = OUT_W / sw
     OUT_H = int(sh * scale)
 
-    # ── Step 1: LibreOffice renders full slide ──────────────────────────────
+    # ── Step 1: PPTX → ODP → PNG (ODP เป็น format ของ LibreOffice เอง render ได้ดีกว่า) ──
     subprocess.run(
-        ["soffice", "--headless", "--convert-to", "png", single_pptx, "--outdir", work_dir],
+        ["soffice", "--headless", "--convert-to", "odp", single_pptx, "--outdir", work_dir],
+        capture_output=True, timeout=60
+    )
+    odp_path = os.path.join(work_dir, "map_single.odp")
+    render_src = odp_path if os.path.exists(odp_path) else single_pptx
+    subprocess.run(
+        ["soffice", "--headless", "--convert-to", "png", render_src, "--outdir", work_dir],
         capture_output=True, timeout=60
     )
     lo_png = os.path.join(work_dir, "map_single.png")
