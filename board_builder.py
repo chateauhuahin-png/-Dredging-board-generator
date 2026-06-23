@@ -82,17 +82,51 @@ def extract_media(pptx_path, out_dir, slide_indices):
     return prs
 
 
+def extract_single_slide(pptx_path, slide_idx, work_dir):
+    """Extract one slide into its own PPTX to reduce memory usage"""
+    prs_full = Presentation(pptx_path)
+    slide    = prs_full.slides[slide_idx - 1]
+    sw, sh   = prs_full.slide_width, prs_full.slide_height
+
+    prs_new = Presentation()
+    prs_new.slide_width  = sw
+    prs_new.slide_height = sh
+    if len(prs_new.slides._sldIdLst) > 0:
+        prs_new.slides._sldIdLst.remove(prs_new.slides._sldIdLst[0])
+
+    new_slide = prs_new.slides.add_slide(prs_new.slide_layouts[6])
+    sp_tree = new_slide.shapes._spTree
+    for child in list(sp_tree):
+        sp_tree.remove(child)
+    for child in slide.shapes._spTree:
+        sp_tree.append(copy.deepcopy(child))
+    for rel in slide.part.rels.values():
+        if "image" in rel.reltype:
+            try:
+                new_slide.part.relate_to(rel.target_part, rel.reltype)
+            except Exception:
+                pass
+
+    out = os.path.join(work_dir, "map_single.pptx")
+    prs_new.save(out)
+    del prs_full
+    return out, sw, sh
+
+
 def render_map_slide(pptx_path, slide_idx, work_dir):
     """Render slide to JPG using PIL — exact EMU coordinates, pictures + text + lines"""
     import io as _io
-    from lxml import etree
 
     NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
-    prs   = Presentation(pptx_path)
-    slide = prs.slides[slide_idx - 1]
-    sw    = prs.slide_width
-    sh    = prs.slide_height
+    # Extract single slide first to save RAM
+    single_pptx, sw, sh = extract_single_slide(pptx_path, slide_idx, work_dir)
+    prs   = Presentation(single_pptx)
+    slide = prs.slides[0]
+
+    OUT_W = 1800
+    scale = OUT_W / sw
+    OUT_H = int(sh * scale)
 
     OUT_W = 1800
     scale = OUT_W / sw
