@@ -241,15 +241,50 @@ def render_map_slide(pptx_path, slide_idx, work_dir):
             else:
                 ty += int(sz_px * 0.6)
 
-    def render_shapes(shapes, dx=0, dy=0):
+    def get_group_transform(grp_shape):
+        """Return (ch_off_x, ch_off_y, sx, sy) for a group shape"""
+        try:
+            xfrm = grp_shape._element.grpSpPr.xfrm
+            if xfrm is None:
+                return 0, 0, 1.0, 1.0
+            co = xfrm.chOff
+            ce = xfrm.chExt
+            ch_off_x = co.x if co is not None else 0
+            ch_off_y = co.y if co is not None else 0
+            ch_ext_cx = ce.cx if ce is not None else (grp_shape.width or 1)
+            ch_ext_cy = ce.cy if ce is not None else (grp_shape.height or 1)
+            gsx = (grp_shape.width or ch_ext_cx) / ch_ext_cx if ch_ext_cx else 1.0
+            gsy = (grp_shape.height or ch_ext_cy) / ch_ext_cy if ch_ext_cy else 1.0
+            return ch_off_x, ch_off_y, gsx, gsy
+        except Exception:
+            return 0, 0, 1.0, 1.0
+
+    def render_shapes(shapes, off_x=0, off_y=0, sx=1.0, sy=1.0, ch_off_x=0, ch_off_y=0):
+        """
+        off_x, off_y : parent group's absolute slide position (EMU)
+        sx, sy       : scale factors from parent group
+        ch_off_x/y   : child coordinate origin of parent group (EMU)
+        """
         for shape in shapes:
             try:
-                x = dx + px(shape.left)
-                y = dy + px(shape.top)
-                w = px(shape.width)
-                h = px(shape.height)
+                sl = shape.left  or 0
+                st = shape.top   or 0
+                sw_ = shape.width  or 0
+                sh_ = shape.height or 0
             except Exception:
                 continue
+
+            # Absolute slide position in EMU
+            abs_x = off_x + (sl - ch_off_x) * sx
+            abs_y = off_y + (st - ch_off_y) * sy
+            abs_w = sw_ * sx
+            abs_h = sh_ * sy
+
+            # Convert to pixels
+            x = int(abs_x * scale)
+            y = int(abs_y * scale)
+            w = int(abs_w * scale)
+            h = int(abs_h * scale)
 
             stype = shape.shape_type
 
@@ -265,8 +300,15 @@ def render_map_slide(pptx_path, slide_idx, work_dir):
                 except Exception as e:
                     print(f"  pic error: {e}")
 
-            elif stype == 6:                     # Group — recurse
-                render_shapes(shape.shapes, x, y)
+            elif stype == 6:                     # Group — recurse with correct transform
+                try:
+                    c_off_x, c_off_y, gsx, gsy = get_group_transform(shape)
+                    render_shapes(shape.shapes,
+                                  abs_x, abs_y,
+                                  sx * gsx, sy * gsy,
+                                  c_off_x, c_off_y)
+                except Exception:
+                    render_shapes(shape.shapes, abs_x, abs_y)
 
             elif stype == 9:                     # Connector / line
                 color, lw = line_color_width(shape)
