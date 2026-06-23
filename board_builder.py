@@ -94,7 +94,7 @@ def render_map_slide(pptx_path, slide_idx, work_dir):
     sw    = prs.slide_width
     sh    = prs.slide_height
 
-    OUT_W = 3000
+    OUT_W = 1800
     scale = OUT_W / sw
     OUT_H = int(sh * scale)
 
@@ -227,6 +227,7 @@ def render_map_slide(pptx_path, slide_idx, work_dir):
                         bg  = Image.new("RGB", (w, h), (255, 255, 255))
                         bg.paste(img, mask=img.split()[3])
                         canvas.paste(bg, (x, y))
+                        del img, bg
                 except Exception as e:
                     print(f"  pic error: {e}")
 
