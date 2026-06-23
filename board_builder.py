@@ -115,12 +115,28 @@ def extract_single_slide(pptx_path, slide_idx, work_dir):
 
 def render_map_slide(pptx_path, slide_idx, work_dir):
     """
-    Composite render (equivalent to PowerPoint 'Paste as Picture'):
-      Step 1: LibreOffice renders full slide → base (text/lines correct, images may be wrong)
-      Step 2: PIL pastes images at exact EMU positions ON TOP → overrides wrong LibreOffice images
+    Render map slide to JPG.
+    Priority 1: Microsoft Graph API (PowerPoint renderer — perfect quality)
+    Priority 2: LibreOffice composite render (fallback)
     """
     import io as _io
 
+    # ── Priority 1: Microsoft Graph API ──────────────────────────────────────
+    try:
+        from graph_convert import slide_to_png, is_configured
+        if is_configured():
+            print("  Using Microsoft Graph API...")
+            png = slide_to_png(pptx_path, slide_idx, work_dir)
+            if png:
+                jpg = os.path.join(work_dir, "map_slide.jpg")
+                Image.open(png).convert("RGB").save(jpg, "JPEG", quality=92)
+                print("  Graph API: success")
+                return jpg
+            print("  Graph API: no output, falling back to LibreOffice")
+    except Exception as e:
+        print(f"  Graph API error: {e}, falling back to LibreOffice")
+
+    # ── Priority 2: LibreOffice composite render ──────────────────────────────
     single_pptx, sw, sh = extract_single_slide(pptx_path, slide_idx, work_dir)
 
     OUT_W = 1800
@@ -228,7 +244,7 @@ def detect_slide_map(pptx_path):
 
 
 def build_board(pptx_path, photo_before, photo_during, photo_after,
-                work_dir, output_path, logo_path=None):
+                work_dir, output_path, logo_path=None, map_override=None):
     """Main function: build board from PPTX + 3 photos"""
 
     os.makedirs(work_dir, exist_ok=True)
@@ -281,11 +297,15 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
         wide = sorted(candidates, key=lambda x: x[1]/max(x[2],1), reverse=True)
         return tall[0][0], wide[0][0]
 
-    # 4. Composite render: PIL images + LibreOffice text/lines
-    print("Rendering map slide (composite)...")
-    map_jpg = render_map_slide(pptx_path, cfg["map"], work_dir)
-    if not map_jpg:
-        map_jpg = find_img(cfg["map"])
+    # 4. Render map slide
+    if map_override and os.path.exists(map_override):
+        print("Using map_override image")
+        map_jpg = map_override
+    else:
+        print("Rendering map slide...")
+        map_jpg = render_map_slide(pptx_path, cfg["map"], work_dir)
+        if not map_jpg:
+            map_jpg = find_img(cfg["map"])
 
     # 5. Get title
     title1, title2 = get_title_from_pptx(pptx_path)
