@@ -83,24 +83,131 @@ def extract_media(pptx_path, out_dir, slide_indices):
 
 
 def render_map_slide(pptx_path, slide_idx, work_dir):
-    """Render slide to JPG using PIL — exact EMU coordinates, no LibreOffice"""
+    """Render slide to JPG using PIL — exact EMU coordinates, pictures + text + lines"""
     import io as _io
+    from lxml import etree
+
+    NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
 
     prs   = Presentation(pptx_path)
     slide = prs.slides[slide_idx - 1]
-    sw    = prs.slide_width   # EMU
-    sh    = prs.slide_height  # EMU
+    sw    = prs.slide_width
+    sh    = prs.slide_height
 
-    OUT_W  = 3000
-    scale  = OUT_W / sw
-    OUT_H  = int(sh * scale)
+    OUT_W = 3000
+    scale = OUT_W / sw
+    OUT_H = int(sh * scale)
 
     canvas = Image.new("RGB", (OUT_W, OUT_H), (255, 255, 255))
+    draw   = ImageDraw.Draw(canvas)
 
     def px(emu):
         return int((emu or 0) * scale)
 
-    def paste_pictures(shapes, dx=0, dy=0):
+    def get_rgb(color_elem):
+        """Try to extract (r,g,b) from an lxml color element"""
+        try:
+            val = color_elem.get("val") or color_elem.get("lastClr")
+            if val:
+                v = int(val, 16)
+                return ((v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF)
+        except Exception:
+            pass
+        return None
+
+    def line_color_width(shape):
+        """Return (color, width_px) for a shape's outline"""
+        color = (0, 0, 0)
+        lw = max(1, px(12700))  # default ~0.5pt
+        try:
+            ln = shape._element.spPr.find(f"{{{NS}}}ln")
+            if ln is None:
+                ln = shape._element.find(f".//{{{NS}}}ln")
+            if ln is not None:
+                w_emu = ln.get("w")
+                if w_emu:
+                    lw = max(1, px(int(w_emu)))
+                solid = ln.find(f"{{{NS}}}solidFill")
+                if solid is not None:
+                    for tag in ("srgbClr", "sysClr"):
+                        el = solid.find(f"{{{NS}}}{tag}")
+                        if el is not None:
+                            c = get_rgb(el)
+                            if c:
+                                color = c
+                                break
+        except Exception:
+            pass
+        return color, lw
+
+    def is_line_shape(shape):
+        """True if shape is drawn as a line/arrow (not a filled block)"""
+        try:
+            spPr = shape._element.spPr
+            pg = spPr.find(f"{{{NS}}}prstGeom")
+            if pg is not None:
+                prst = pg.get("prst", "")
+                LINE_PRSTS = {"line", "lineInv", "straightConnector1",
+                              "bentConnector2", "bentConnector3",
+                              "curvedConnector2", "curvedConnector3",
+                              "leftRightArrow", "upDownArrow",
+                              "rightArrow", "leftArrow", "upArrow", "downArrow"}
+                if prst in LINE_PRSTS or "line" in prst.lower() or "Arrow" in prst:
+                    return True
+        except Exception:
+            pass
+        return False
+
+    def draw_line_shape(shape, x, y, w, h):
+        color, lw = line_color_width(shape)
+        try:
+            xfrm = shape._element.spPr.xfrm
+            flipH = xfrm is not None and xfrm.get("flipH") == "1"
+            flipV = xfrm is not None and xfrm.get("flipV") == "1"
+        except Exception:
+            flipH = flipV = False
+        x1, y1 = (x + w if flipH else x), (y + h if flipV else y)
+        x2, y2 = (x if flipH else x + w), (y if flipV else y + h)
+        draw.line([(x1, y1), (x2, y2)], fill=color, width=lw)
+
+    def draw_text_frame(shape, x, y, w, h):
+        try:
+            tf = shape.text_frame
+        except Exception:
+            return
+        ty = y
+        for para in tf.paragraphs:
+            line_texts = []
+            sz_px = 16
+            color  = (0, 0, 0)
+            bold   = False
+            for run in para.runs:
+                if not run.text:
+                    continue
+                try:
+                    if run.font.size:
+                        sz_px = max(8, int(run.font.size.pt * scale * 96 / 72))
+                except Exception:
+                    pass
+                try:
+                    bold = bool(run.font.bold)
+                except Exception:
+                    pass
+                try:
+                    rgb = run.font.color.rgb
+                    color = (rgb.red, rgb.green, rgb.blue)
+                except Exception:
+                    pass
+                line_texts.append(run.text)
+            text = "".join(line_texts).strip()
+            if text:
+                f = fnt(sz_px, bold)
+                draw.text((x + 4, ty), text, font=f, fill=color)
+                ty += int(sz_px * 1.3)
+            else:
+                ty += int(sz_px * 0.6)
+
+    def render_shapes(shapes, dx=0, dy=0):
         for shape in shapes:
             try:
                 x = dx + px(shape.left)
@@ -109,23 +216,34 @@ def render_map_slide(pptx_path, slide_idx, work_dir):
                 h = px(shape.height)
             except Exception:
                 continue
-            if w <= 0 or h <= 0:
-                continue
 
-            if shape.shape_type == 13:          # Picture
+            stype = shape.shape_type
+
+            if stype == 13:                      # Picture
                 try:
                     img = Image.open(_io.BytesIO(shape.image.blob)).convert("RGBA")
-                    img = img.resize((w, h), Image.LANCZOS)
-                    bg  = Image.new("RGB", (w, h), (255, 255, 255))
-                    bg.paste(img, mask=img.split()[3])
-                    canvas.paste(bg, (x, y))
+                    if w > 0 and h > 0:
+                        img = img.resize((w, h), Image.LANCZOS)
+                        bg  = Image.new("RGB", (w, h), (255, 255, 255))
+                        bg.paste(img, mask=img.split()[3])
+                        canvas.paste(bg, (x, y))
                 except Exception as e:
                     print(f"  pic error: {e}")
 
-            elif shape.shape_type == 6:          # Group — recurse with offset
-                paste_pictures(shape.shapes, x, y)
+            elif stype == 6:                     # Group — recurse
+                render_shapes(shape.shapes, x, y)
 
-    paste_pictures(slide.shapes)
+            elif stype == 9:                     # Connector / line
+                color, lw = line_color_width(shape)
+                draw.line([(x, y), (x + w, y + h)], fill=color, width=lw)
+
+            else:                                # Auto shape / text box
+                if is_line_shape(shape):
+                    draw_line_shape(shape, x, y, w, h)
+                if hasattr(shape, "has_text_frame") and shape.has_text_frame:
+                    draw_text_frame(shape, x, y, w, h)
+
+    render_shapes(slide.shapes)
 
     jpg = os.path.join(work_dir, "map_slide.jpg")
     canvas.save(jpg, "JPEG", quality=92)
