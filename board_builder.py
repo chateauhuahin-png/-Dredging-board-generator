@@ -114,216 +114,101 @@ def extract_single_slide(pptx_path, slide_idx, work_dir):
 
 
 def render_map_slide(pptx_path, slide_idx, work_dir):
-    """Render slide to JPG using PIL — exact EMU coordinates, pictures + text + lines"""
+    """
+    Composite render:
+      Layer 1 (PIL)         — pictures at exact EMU positions
+      Layer 2 (LibreOffice) — text + lines only (pictures removed from PPTX)
+      Final = multiply(Layer1, Layer2)  →  white in L2 is transparent
+    """
     import io as _io
+    from PIL import ImageChops
 
-    NS = "http://schemas.openxmlformats.org/drawingml/2006/main"
-
-    # Extract single slide first to save RAM
     single_pptx, sw, sh = extract_single_slide(pptx_path, slide_idx, work_dir)
+
+    OUT_W = 1800
+    scale = OUT_W / sw
+    OUT_H = int(sh * scale)
+
+    # ── Layer 1: PIL pictures at correct positions ──────────────────────────
     prs   = Presentation(single_pptx)
     slide = prs.slides[0]
+    img_layer = Image.new("RGB", (OUT_W, OUT_H), (255, 255, 255))
 
-    OUT_W = 1800
-    scale = OUT_W / sw
-    OUT_H = int(sh * scale)
-
-    OUT_W = 1800
-    scale = OUT_W / sw
-    OUT_H = int(sh * scale)
-
-    canvas = Image.new("RGB", (OUT_W, OUT_H), (255, 255, 255))
-    draw   = ImageDraw.Draw(canvas)
-
-    def px(emu):
-        return int((emu or 0) * scale)
-
-    def get_rgb(color_elem):
-        """Try to extract (r,g,b) from an lxml color element"""
+    def grp_transform(grp):
         try:
-            val = color_elem.get("val") or color_elem.get("lastClr")
-            if val:
-                v = int(val, 16)
-                return ((v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF)
-        except Exception:
-            pass
-        return None
-
-    def line_color_width(shape):
-        """Return (color, width_px) for a shape's outline"""
-        color = (0, 0, 0)
-        lw = max(1, px(12700))  # default ~0.5pt
-        try:
-            ln = shape._element.spPr.find(f"{{{NS}}}ln")
-            if ln is None:
-                ln = shape._element.find(f".//{{{NS}}}ln")
-            if ln is not None:
-                w_emu = ln.get("w")
-                if w_emu:
-                    lw = max(1, px(int(w_emu)))
-                solid = ln.find(f"{{{NS}}}solidFill")
-                if solid is not None:
-                    for tag in ("srgbClr", "sysClr"):
-                        el = solid.find(f"{{{NS}}}{tag}")
-                        if el is not None:
-                            c = get_rgb(el)
-                            if c:
-                                color = c
-                                break
-        except Exception:
-            pass
-        return color, lw
-
-    def is_line_shape(shape):
-        """True if shape is drawn as a line/arrow (not a filled block)"""
-        try:
-            spPr = shape._element.spPr
-            pg = spPr.find(f"{{{NS}}}prstGeom")
-            if pg is not None:
-                prst = pg.get("prst", "")
-                LINE_PRSTS = {"line", "lineInv", "straightConnector1",
-                              "bentConnector2", "bentConnector3",
-                              "curvedConnector2", "curvedConnector3",
-                              "leftRightArrow", "upDownArrow",
-                              "rightArrow", "leftArrow", "upArrow", "downArrow"}
-                if prst in LINE_PRSTS or "line" in prst.lower() or "Arrow" in prst:
-                    return True
-        except Exception:
-            pass
-        return False
-
-    def draw_line_shape(shape, x, y, w, h):
-        color, lw = line_color_width(shape)
-        try:
-            xfrm = shape._element.spPr.xfrm
-            flipH = xfrm is not None and xfrm.get("flipH") == "1"
-            flipV = xfrm is not None and xfrm.get("flipV") == "1"
-        except Exception:
-            flipH = flipV = False
-        x1, y1 = (x + w if flipH else x), (y + h if flipV else y)
-        x2, y2 = (x if flipH else x + w), (y if flipV else y + h)
-        draw.line([(x1, y1), (x2, y2)], fill=color, width=lw)
-
-    def draw_text_frame(shape, x, y, w, h):
-        try:
-            tf = shape.text_frame
-        except Exception:
-            return
-        ty = y
-        for para in tf.paragraphs:
-            line_texts = []
-            sz_px = 16
-            color  = (0, 0, 0)
-            bold   = False
-            for run in para.runs:
-                if not run.text:
-                    continue
-                try:
-                    if run.font.size:
-                        sz_px = max(8, int(run.font.size.pt * scale * 96 / 72))
-                except Exception:
-                    pass
-                try:
-                    bold = bool(run.font.bold)
-                except Exception:
-                    pass
-                try:
-                    rgb = run.font.color.rgb
-                    color = (rgb.red, rgb.green, rgb.blue)
-                except Exception:
-                    pass
-                line_texts.append(run.text)
-            text = "".join(line_texts).strip()
-            if text:
-                f = fnt(sz_px, bold)
-                draw.text((x + 4, ty), text, font=f, fill=color)
-                ty += int(sz_px * 1.3)
-            else:
-                ty += int(sz_px * 0.6)
-
-    def get_group_transform(grp_shape):
-        """Return (ch_off_x, ch_off_y, sx, sy) for a group shape"""
-        try:
-            xfrm = grp_shape._element.grpSpPr.xfrm
-            if xfrm is None:
-                return 0, 0, 1.0, 1.0
-            co = xfrm.chOff
-            ce = xfrm.chExt
-            ch_off_x = co.x if co is not None else 0
-            ch_off_y = co.y if co is not None else 0
-            ch_ext_cx = ce.cx if ce is not None else (grp_shape.width or 1)
-            ch_ext_cy = ce.cy if ce is not None else (grp_shape.height or 1)
-            gsx = (grp_shape.width or ch_ext_cx) / ch_ext_cx if ch_ext_cx else 1.0
-            gsy = (grp_shape.height or ch_ext_cy) / ch_ext_cy if ch_ext_cy else 1.0
-            return ch_off_x, ch_off_y, gsx, gsy
+            xfrm = grp._element.grpSpPr.xfrm
+            co, ce = xfrm.chOff, xfrm.chExt
+            cox = co.x if co else 0;  coy = co.y if co else 0
+            cex = ce.cx if ce else (grp.width or 1)
+            cey = ce.cy if ce else (grp.height or 1)
+            return cox, coy, (grp.width or cex)/cex, (grp.height or cey)/cey
         except Exception:
             return 0, 0, 1.0, 1.0
 
-    def render_shapes(shapes, off_x=0, off_y=0, sx=1.0, sy=1.0, ch_off_x=0, ch_off_y=0):
-        """
-        off_x, off_y : parent group's absolute slide position (EMU)
-        sx, sy       : scale factors from parent group
-        ch_off_x/y   : child coordinate origin of parent group (EMU)
-        """
-        for shape in shapes:
+    def paste_pics(shapes, ox=0, oy=0, sx=1.0, sy=1.0, cox=0, coy=0):
+        for s in shapes:
             try:
-                sl = shape.left  or 0
-                st = shape.top   or 0
-                sw_ = shape.width  or 0
-                sh_ = shape.height or 0
+                ax = ox + (( s.left  or 0) - cox) * sx
+                ay = oy + (( s.top   or 0) - coy) * sy
+                aw = ( s.width  or 0) * sx
+                ah = ( s.height or 0) * sy
             except Exception:
                 continue
-
-            # Absolute slide position in EMU
-            abs_x = off_x + (sl - ch_off_x) * sx
-            abs_y = off_y + (st - ch_off_y) * sy
-            abs_w = sw_ * sx
-            abs_h = sh_ * sy
-
-            # Convert to pixels
-            x = int(abs_x * scale)
-            y = int(abs_y * scale)
-            w = int(abs_w * scale)
-            h = int(abs_h * scale)
-
-            stype = shape.shape_type
-
-            if stype == 13:                      # Picture
+            px, py = int(ax*scale), int(ay*scale)
+            pw, ph = int(aw*scale), int(ah*scale)
+            if s.shape_type == 13 and pw > 0 and ph > 0:
                 try:
-                    img = Image.open(_io.BytesIO(shape.image.blob)).convert("RGBA")
-                    if w > 0 and h > 0:
-                        img = img.resize((w, h), Image.LANCZOS)
-                        bg  = Image.new("RGB", (w, h), (255, 255, 255))
-                        bg.paste(img, mask=img.split()[3])
-                        canvas.paste(bg, (x, y))
-                        del img, bg
+                    im = Image.open(_io.BytesIO(s.image.blob)).convert("RGBA")
+                    im = im.resize((pw, ph), Image.LANCZOS)
+                    bg = Image.new("RGB", (pw, ph), (255, 255, 255))
+                    bg.paste(im, mask=im.split()[3])
+                    img_layer.paste(bg, (px, py))
+                    del im, bg
                 except Exception as e:
-                    print(f"  pic error: {e}")
+                    print(f"  pic: {e}")
+            elif s.shape_type == 6:
+                c_cox, c_coy, gsx, gsy = grp_transform(s)
+                paste_pics(s.shapes, ax, ay, sx*gsx, sy*gsy, c_cox, c_coy)
 
-            elif stype == 6:                     # Group — recurse with correct transform
-                try:
-                    c_off_x, c_off_y, gsx, gsy = get_group_transform(shape)
-                    render_shapes(shape.shapes,
-                                  abs_x, abs_y,
-                                  sx * gsx, sy * gsy,
-                                  c_off_x, c_off_y)
-                except Exception:
-                    render_shapes(shape.shapes, abs_x, abs_y)
+    paste_pics(slide.shapes)
+    del prs
 
-            elif stype == 9:                     # Connector / line
-                color, lw = line_color_width(shape)
-                draw.line([(x, y), (x + w, y + h)], fill=color, width=lw)
+    # ── Layer 2: LibreOffice renders text + lines (no pictures) ────────────
+    prs2  = Presentation(single_pptx)
+    slide2 = prs2.slides[0]
 
-            else:                                # Auto shape / text box
-                if is_line_shape(shape):
-                    draw_line_shape(shape, x, y, w, h)
-                if hasattr(shape, "has_text_frame") and shape.has_text_frame:
-                    draw_text_frame(shape, x, y, w, h)
+    def remove_pics(container):
+        to_del = []
+        for el in container:
+            tag = el.tag.split('}')[-1] if '}' in el.tag else el.tag
+            if tag == 'pic':
+                to_del.append(el)
+            elif tag == 'grpSp':
+                remove_pics(el)
+        for el in to_del:
+            container.remove(el)
 
-    render_shapes(slide.shapes)
+    remove_pics(slide2.shapes._spTree)
+    text_pptx = os.path.join(work_dir, "map_text.pptx")
+    prs2.save(text_pptx)
+    del prs2
+
+    subprocess.run(
+        ["soffice", "--headless", "--convert-to", "png", text_pptx, "--outdir", work_dir],
+        capture_output=True, timeout=60
+    )
+    text_png = os.path.join(work_dir, "map_text.png")
+
+    # ── Composite ────────────────────────────────────────────────────────────
+    if os.path.exists(text_png):
+        txt = Image.open(text_png).convert("RGB").resize((OUT_W, OUT_H), Image.LANCZOS)
+        # multiply: white(255) in txt → preserves img_layer; dark text/lines → shows on top
+        result = ImageChops.multiply(img_layer, txt)
+    else:
+        result = img_layer
 
     jpg = os.path.join(work_dir, "map_slide.jpg")
-    canvas.save(jpg, "JPEG", quality=92)
+    result.save(jpg, "JPEG", quality=92)
     return jpg
 
 
@@ -416,11 +301,11 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
         wide = sorted(candidates, key=lambda x: x[1]/max(x[2],1), reverse=True)
         return tall[0][0], wide[0][0]
 
-    # 4. Extract map image directly (user should flatten map slide to single picture)
-    print("Extracting map image...")
-    map_jpg = find_img(cfg["map"])
+    # 4. Composite render: PIL images + LibreOffice text/lines
+    print("Rendering map slide (composite)...")
+    map_jpg = render_map_slide(pptx_path, cfg["map"], work_dir)
     if not map_jpg:
-        map_jpg = render_map_slide(pptx_path, cfg["map"], work_dir)
+        map_jpg = find_img(cfg["map"])
 
     # 5. Get title
     title1, title2 = get_title_from_pptx(pptx_path)
