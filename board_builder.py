@@ -416,11 +416,11 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
         wide = sorted(candidates, key=lambda x: x[1]/max(x[2],1), reverse=True)
         return tall[0][0], wide[0][0]
 
-    # 4. Render map slide via LibreOffice
-    print("Rendering map slide...")
-    map_jpg = render_map_slide(pptx_path, cfg["map"], work_dir)
+    # 4. Extract map image directly (user should flatten map slide to single picture)
+    print("Extracting map image...")
+    map_jpg = find_img(cfg["map"])
     if not map_jpg:
-        map_jpg = find_img(cfg["map"])
+        map_jpg = render_map_slide(pptx_path, cfg["map"], work_dir)
 
     # 5. Get title
     title1, title2 = get_title_from_pptx(pptx_path)
