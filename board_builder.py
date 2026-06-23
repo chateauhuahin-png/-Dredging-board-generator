@@ -20,7 +20,7 @@ UW = W - 2*MG
 UH = H - 2*MG
 HDR  = 400
 PHH  = 840
-LH   = 72
+LH   = 100
 CL   = int(UW * 0.295)
 CM   = int(UW * 0.325)
 CR   = UW - CL - CM - 2*GAP
@@ -49,7 +49,7 @@ def fit(path, w, h, bg=WHITE):
     return canvas
 
 
-def sec(draw, board, label, img_path, x, y, w, h, lsz=52):
+def sec(draw, board, label, img_path, x, y, w, h, lsz=68):
     draw.rectangle([x, y, x+w, y+LH], fill=NAVY)
     f = fnt(lsz, bold=True)
     bb = draw.textbbox((0, 0), label, font=f)
@@ -265,14 +265,14 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
         board.paste(lg, (XL, MG + (HDR-logo_sz)//2))
         board.paste(lg, (W-MG-logo_sz, MG + (HDR-logo_sz)//2))
 
-    t1sz = 88 if len(title1) < 60 else 80
-    f1 = fnt(t1sz, True); f2 = fnt(68)
+    t1sz = 116 if len(title1) < 60 else 104
+    f1 = fnt(t1sz, True); f2 = fnt(90)
     cx = W // 2
     bb1 = draw.textbbox((0,0), title1, font=f1)
     bb2 = draw.textbbox((0,0), title2, font=f2)
-    draw.text((cx-(bb1[2]-bb1[0])//2, MG+70),  title1, font=f1, fill=GOLD)
-    draw.text((cx-(bb2[2]-bb2[0])//2, MG+195), title2, font=f2, fill=WHITE)
-    draw.text((W-MG-400, MG+HDR-56), "นทพ.", font=fnt(44), fill=WHITE)
+    draw.text((cx-(bb1[2]-bb1[0])//2, MG+45),  title1, font=f1, fill=GOLD)
+    draw.text((cx-(bb2[2]-bb2[0])//2, MG+205), title2, font=f2, fill=WHITE)
+    draw.text((W-MG-400, MG+HDR-64), "นทพ.", font=fnt(56), fill=WHITE)
 
     # Left column
     boq_h = int(CONH * 0.54)
@@ -282,7 +282,7 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
     # Middle column
     map_h = int(CONH * 0.50)
     sec(draw, board, "แผนที่และจุดดำเนินการ (มาตราส่วน 1:50,000)",
-        map_jpg, XM, CONY, CM, map_h, lsz=46)
+        map_jpg, XM, CONY, CM, map_h, lsz=60)
     sy = CONY + map_h + GAP
     sh = int(CONH * 0.265)
     sec(draw, board, "ตารางการสำรวจ",    surv_img, XM, sy,          CM, sh)
@@ -297,7 +297,7 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
     LW2 = (CR - GAP) // 2
     draw.rectangle([XR, ly, XR+CR, ly+LH], fill=NAVY)
     lbl = "หนังสือรับรองการดำเนินงาน / ตรวจสอบความซ้ำซ้อน"
-    fl = fnt(44, True)
+    fl = fnt(58, True)
     bb = draw.textbbox((0,0), lbl, font=fl)
     draw.text((XR+(CR-(bb[2]-bb[0]))//2, ly+(LH-(bb[3]-bb[1]))//2),
               lbl, font=fl, fill=GOLD)
@@ -316,7 +316,7 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
     )):
         px = XL + idx * (PW + GAP)
         draw.rectangle([px, phy, px+PW, phy+LH], fill=NAVY)
-        fp = fnt(58, True)
+        fp = fnt(76, True)
         bbl = draw.textbbox((0,0), lbl, font=fp)
         draw.text((px+(PW-(bbl[2]-bbl[0]))//2, phy+(LH-(bbl[3]-bbl[1]))//2),
                   lbl, font=fp, fill=GOLD)
