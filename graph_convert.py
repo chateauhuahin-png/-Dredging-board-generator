@@ -2,7 +2,10 @@
 Microsoft Graph API — แปลง PPTX slide เป็น PNG ด้วย PowerPoint renderer จริง
 ตั้งค่า env vars: AZURE_CLIENT_ID, AZURE_CLIENT_SECRET, AZURE_REFRESH_TOKEN
 """
-import os, requests, subprocess, glob
+import os, sys, requests, subprocess, glob
+
+def log(msg):
+    print(msg, file=sys.stderr, flush=True)
 
 CLIENT_ID     = os.environ.get("AZURE_CLIENT_ID", "")
 CLIENT_SECRET = os.environ.get("AZURE_CLIENT_SECRET", "")
@@ -10,12 +13,14 @@ REFRESH_TOKEN = os.environ.get("AZURE_REFRESH_TOKEN", "")
 
 
 def is_configured():
-    return bool(CLIENT_ID and CLIENT_SECRET and REFRESH_TOKEN)
+    ok = bool(CLIENT_ID and CLIENT_SECRET and REFRESH_TOKEN)
+    log(f"[graph] is_configured={ok} CLIENT_ID={'set' if CLIENT_ID else 'MISSING'} SECRET={'set' if CLIENT_SECRET else 'MISSING'} TOKEN={'set' if REFRESH_TOKEN else 'MISSING'}")
+    return ok
 
 
 def get_access_token():
     r = requests.post(
-        "https://login.microsoftonline.com/common/oauth2/v2.0/token",
+        "https://login.microsoftonline.com/consumers/oauth2/v2.0/token",
         data={
             "client_id":     CLIENT_ID,
             "client_secret": CLIENT_SECRET,
@@ -56,8 +61,9 @@ def slide_to_png(pptx_path, slide_idx, work_dir):
         item    = resp.json()
         item_id = item.get("id")
         if not item_id:
-            print(f"  graph upload failed: {item}")
+            log(f"[graph] upload failed: {item}")
             return None
+        log(f"[graph] uploaded item_id={item_id}")
 
         try:
             # 2. ดาวน์โหลดเป็น PDF (Microsoft ใช้ PowerPoint render จริง)
@@ -65,8 +71,9 @@ def slide_to_png(pptx_path, slide_idx, work_dir):
                 f"https://graph.microsoft.com/v1.0/me/drive/items/{item_id}/content?format=pdf",
                 headers=headers, allow_redirects=True, timeout=120
             )
+            log(f"[graph] pdf status={pdf_resp.status_code} size={len(pdf_resp.content)}")
             if pdf_resp.status_code != 200:
-                print(f"  graph pdf error: {pdf_resp.status_code}")
+                log(f"[graph] pdf error body: {pdf_resp.text[:200]}")
                 return None
 
             pdf_path = os.path.join(work_dir, "map_graph.pdf")
@@ -75,14 +82,16 @@ def slide_to_png(pptx_path, slide_idx, work_dir):
 
             # 3. แยก slide ที่ต้องการเป็น PNG ด้วย pdftoppm
             out_prefix = os.path.join(work_dir, "map_graph")
-            subprocess.run(
+            r = subprocess.run(
                 ["pdftoppm", "-r", "200",
                  "-f", str(slide_idx), "-l", str(slide_idx),
                  "-png", pdf_path, out_prefix],
                 capture_output=True, timeout=30
             )
+            log(f"[graph] pdftoppm rc={r.returncode} stderr={r.stderr.decode()[:100]}")
 
             pngs = sorted(glob.glob(f"{out_prefix}*.png"))
+            log(f"[graph] pngs found: {pngs}")
             return pngs[0] if pngs else None
 
         finally:
@@ -93,5 +102,5 @@ def slide_to_png(pptx_path, slide_idx, work_dir):
             )
 
     except Exception as e:
-        print(f"  graph convert error: {e}")
+        log(f"[graph] ERROR: {e}")
         return None
