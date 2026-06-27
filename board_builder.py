@@ -332,21 +332,30 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
     draw.rectangle([MG, MG, W-MG, MG+HDR], fill=NAVY)
     logo_sz = 340
 
-    # Logo — มุมบนซ้าย
+    # Logo — มุมบนซ้าย (paste with transparency)
     if logo_path and os.path.exists(logo_path):
-        lg = fit(logo_path, logo_sz, logo_sz, NAVY)
-        board.paste(lg, (XL, MG + (HDR-logo_sz)//2))
+        try:
+            lg_img = Image.open(logo_path).convert("RGBA")
+            lw, lh_img = lg_img.size
+            sc = min(logo_sz / lw, logo_sz / lh_img)
+            nw, nh = int(lw * sc), int(lh_img * sc)
+            lg_img = lg_img.resize((nw, nh), Image.LANCZOS)
+            lx = XL + (logo_sz - nw) // 2
+            ly_logo = MG + (HDR - nh) // 2
+            board.paste(lg_img, (lx, ly_logo), mask=lg_img.split()[3])
+        except Exception as e:
+            print(f"  logo error: {e}")
 
-    # ชื่อหน่วยงาน — มุมบนขวา
-    agency_line1 = "นพค.43  สนภ.4"
-    agency_line2 = "นทพ."
-    fa  = fnt(90, bold=True)
-    fa2 = fnt(80, bold=True)
-    bb_a1 = draw.textbbox((0,0), agency_line1, font=fa)
-    bb_a2 = draw.textbbox((0,0), agency_line2, font=fa2)
+    # ชื่อหน่วยงาน — มุมบนขวา (สีขาว บรรทัดเดียว ฟอนต์ใหญ่)
+    agency_text = "นพค.43  สนภ.4  นทพ."
+    fa = fnt(110, bold=True)
+    bb_a = draw.textbbox((0,0), agency_text, font=fa)
+    aw = bb_a[2] - bb_a[0]
+    ah = bb_a[3] - bb_a[1]
     right_x = W - MG - logo_sz
-    draw.text((right_x - (bb_a1[2]-bb_a1[0]), MG + 60),  agency_line1, font=fa,  fill=GOLD)
-    draw.text((right_x - (bb_a2[2]-bb_a2[0]), MG + 175), agency_line2, font=fa2, fill=WHITE)
+    ax = right_x - aw
+    ay = MG + (HDR - ah) // 2
+    draw.text((ax, ay), agency_text, font=fa, fill=WHITE)
 
     t1sz = 116 if len(title1) < 60 else 104
     f1 = fnt(t1sz, True); f2 = fnt(90)
