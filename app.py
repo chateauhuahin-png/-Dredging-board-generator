@@ -34,11 +34,11 @@ def generate():
     os.makedirs(work_dir, exist_ok=True)
 
     try:
-        pptx_file   = request.files.get("pptx")
+        pptx_file    = request.files.get("pptx")
         photo_before = request.files.get("photo_before")
         photo_during = request.files.get("photo_during")
         photo_after  = request.files.get("photo_after")
-        logo_file    = request.files.get("logo")
+        map_file     = request.files.get("map_image")
 
         if not pptx_file:
             return jsonify({"error": "กรุณาอัปโหลดไฟล์ PPTX"}), 400
@@ -47,7 +47,7 @@ def generate():
         before_path  = save_upload(photo_before,  work_dir, "before.jpg")
         during_path  = save_upload(photo_during,  work_dir, "during.jpg")
         after_path   = save_upload(photo_after,   work_dir, "after.jpg")
-        logo_path    = save_upload(logo_file,     work_dir, "logo.png") if logo_file and logo_file.filename else None
+        map_path     = save_upload(map_file,      work_dir, "map_override.png") if map_file and map_file.filename else None
 
         output_path = os.path.join(OUTPUT_DIR, f"board_{job_id}.jpg")
 
@@ -58,7 +58,7 @@ def generate():
             photo_after=after_path,
             work_dir=work_dir,
             output_path=output_path,
-            logo_path=logo_path,
+            map_override=map_path,
         )
 
         return jsonify({"job_id": job_id, "url": f"/download/{job_id}"})

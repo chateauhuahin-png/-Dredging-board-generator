@@ -245,6 +245,8 @@ def detect_slide_map(pptx_path):
 
 def build_board(pptx_path, photo_before, photo_during, photo_after,
                 work_dir, output_path, logo_path=None, map_override=None):
+    # Always use built-in logo
+    logo_path = os.path.join(BASE_DIR, "fonts", "logo.png")
     """Main function: build board from PPTX + 3 photos"""
 
     os.makedirs(work_dir, exist_ok=True)
@@ -312,9 +314,7 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
     print(f"Title: {title1}")
     print(f"Location: {title2}")
 
-    # 6. Get logo
-    if not logo_path:
-        logo_path = os.path.join(BASE_DIR, "fonts", "logo.png")  # optional
+    # 6. Logo is already set at function entry
 
     boq_img, price_img = find_boq_imgs(cfg["boq"])
     surv_img  = find_img(cfg["surv"])
@@ -331,10 +331,22 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
     # Header
     draw.rectangle([MG, MG, W-MG, MG+HDR], fill=NAVY)
     logo_sz = 340
+
+    # Logo — มุมบนซ้าย
     if logo_path and os.path.exists(logo_path):
         lg = fit(logo_path, logo_sz, logo_sz, NAVY)
         board.paste(lg, (XL, MG + (HDR-logo_sz)//2))
-        board.paste(lg, (W-MG-logo_sz, MG + (HDR-logo_sz)//2))
+
+    # ชื่อหน่วยงาน — มุมบนขวา
+    agency_line1 = "นพค.43  สนภ.4"
+    agency_line2 = "นทพ."
+    fa  = fnt(90, bold=True)
+    fa2 = fnt(80, bold=True)
+    bb_a1 = draw.textbbox((0,0), agency_line1, font=fa)
+    bb_a2 = draw.textbbox((0,0), agency_line2, font=fa2)
+    right_x = W - MG - logo_sz
+    draw.text((right_x - (bb_a1[2]-bb_a1[0]), MG + 60),  agency_line1, font=fa,  fill=GOLD)
+    draw.text((right_x - (bb_a2[2]-bb_a2[0]), MG + 175), agency_line2, font=fa2, fill=WHITE)
 
     t1sz = 116 if len(title1) < 60 else 104
     f1 = fnt(t1sz, True); f2 = fnt(90)
@@ -343,7 +355,6 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
     bb2 = draw.textbbox((0,0), title2, font=f2)
     draw.text((cx-(bb1[2]-bb1[0])//2, MG+45),  title1, font=f1, fill=GOLD)
     draw.text((cx-(bb2[2]-bb2[0])//2, MG+205), title2, font=f2, fill=WHITE)
-    draw.text((W-MG-400, MG+HDR-64), "นทพ.", font=fnt(56), fill=WHITE)
 
     # Left column
     boq_h = int(CONH * 0.54)
