@@ -209,15 +209,32 @@ def render_map_slide(pptx_path, slide_idx, work_dir):
 
 
 def get_title_from_pptx(pptx_path):
-    """Extract title and location from slide 1"""
+    """Extract title, location, and agency name from slide 1"""
     prs = Presentation(pptx_path)
-    for shape in prs.slides[0].shapes:
-        if hasattr(shape, "text") and "งานขุด" in shape.text:
-            lines = [l.strip() for l in shape.text.strip().split("\n") if l.strip()]
+    slide = prs.slides[0]
+    title1, title2, agency = "งานขุดลอกลำน้ำ", "", ""
+
+    for shape in slide.shapes:
+        if not hasattr(shape, "text") or not shape.text.strip():
+            continue
+        text = shape.text.strip()
+
+        # ดึงชื่อหน่วยงาน — หาจาก shape ที่มีคำว่า นพค หรือ นทพ
+        if not agency and ("นพค" in text or "นทพ" in text):
+            lines = [l.strip() for l in text.split("\n") if l.strip()]
+            # เอาเฉพาะบรรทัดที่เป็นชื่อหน่วยงาน
+            for line in lines:
+                if "นพค" in line or "นทพ" in line:
+                    agency = line
+                    break
+
+        # ดึงชื่องานและที่ตั้ง
+        if "งานขุด" in text:
+            lines = [l.strip() for l in text.split("\n") if l.strip()]
             title1 = f"{lines[0]} {lines[1]}" if len(lines) > 1 else lines[0]
             title2 = lines[2] if len(lines) > 2 else ""
-            return title1, title2
-    return "งานขุดลอกลำน้ำ", ""
+
+    return title1, title2, agency
 
 
 def detect_slide_map(pptx_path):
@@ -309,10 +326,11 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
         if not map_jpg:
             map_jpg = find_img(cfg["map"])
 
-    # 5. Get title
-    title1, title2 = get_title_from_pptx(pptx_path)
+    # 5. Get title and agency name
+    title1, title2, agency = get_title_from_pptx(pptx_path)
     print(f"Title: {title1}")
     print(f"Location: {title2}")
+    print(f"Agency: {agency}")
 
     # 6. Logo is already set at function entry
 
@@ -347,7 +365,7 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
             print(f"  logo error: {e}")
 
     # ชื่อหน่วยงาน — มุมบนขวา (สีขาว บรรทัดเดียว ฟอนต์ใหญ่)
-    agency_text = "นพค.43  สนภ.4  นทพ."
+    agency_text = agency if agency else ""
     fa = fnt(122, bold=True)
     bb_a = draw.textbbox((0,0), agency_text, font=fa)
     aw = bb_a[2] - bb_a[0]
