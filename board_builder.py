@@ -49,7 +49,7 @@ def fit(path, w, h, bg=WHITE):
     return canvas
 
 
-def sec(draw, board, label, img_path, x, y, w, h, lsz=68):
+def sec(draw, board, label, img_path, x, y, w, h, lsz=76):
     draw.rectangle([x, y, x+w, y+LH], fill=NAVY)
     f = fnt(lsz, bold=True)
     bb = draw.textbbox((0, 0), label, font=f)
@@ -348,7 +348,7 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
 
     # ชื่อหน่วยงาน — มุมบนขวา (สีขาว บรรทัดเดียว ฟอนต์ใหญ่)
     agency_text = "นพค.43  สนภ.4  นทพ."
-    fa = fnt(110, bold=True)
+    fa = fnt(122, bold=True)
     bb_a = draw.textbbox((0,0), agency_text, font=fa)
     aw = bb_a[2] - bb_a[0]
     ah = bb_a[3] - bb_a[1]
@@ -357,8 +357,8 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
     ay = MG + (HDR - ah) // 2
     draw.text((ax, ay), agency_text, font=fa, fill=WHITE)
 
-    t1sz = 116 if len(title1) < 60 else 104
-    f1 = fnt(t1sz, True); f2 = fnt(90)
+    t1sz = 128 if len(title1) < 60 else 116
+    f1 = fnt(t1sz, True); f2 = fnt(100)
     cx = W // 2
     bb1 = draw.textbbox((0,0), title1, font=f1)
     bb2 = draw.textbbox((0,0), title2, font=f2)
@@ -373,7 +373,7 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
     # Middle column
     map_h = int(CONH * 0.50)
     sec(draw, board, "แผนที่และจุดดำเนินการ (มาตราส่วน 1:50,000)",
-        map_jpg, XM, CONY, CM, map_h, lsz=60)
+        map_jpg, XM, CONY, CM, map_h, lsz=68)
     sy = CONY + map_h + GAP
     sh = int(CONH * 0.265)
     sec(draw, board, "ตารางการสำรวจ",    surv_img, XM, sy,          CM, sh)
@@ -388,7 +388,7 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
     LW2 = (CR - GAP) // 2
     draw.rectangle([XR, ly, XR+CR, ly+LH], fill=NAVY)
     lbl = "หนังสือรับรองการดำเนินงาน / ตรวจสอบความซ้ำซ้อน"
-    fl = fnt(58, True)
+    fl = fnt(66, True)
     bb = draw.textbbox((0,0), lbl, font=fl)
     draw.text((XR+(CR-(bb[2]-bb[0]))//2, ly+(LH-(bb[3]-bb[1]))//2),
               lbl, font=fl, fill=GOLD)
@@ -407,7 +407,7 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
     )):
         px = XL + idx * (PW + GAP)
         draw.rectangle([px, phy, px+PW, phy+LH], fill=NAVY)
-        fp = fnt(76, True)
+        fp = fnt(84, True)
         bbl = draw.textbbox((0,0), lbl, font=fp)
         draw.text((px+(PW-(bbl[2]-bbl[0]))//2, phy+(LH-(bbl[3]-bbl[1]))//2),
                   lbl, font=fp, fill=GOLD)
