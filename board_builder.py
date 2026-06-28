@@ -238,20 +238,25 @@ def get_title_from_pptx(pptx_path):
 
 
 def detect_slide_map(pptx_path):
-    """Auto-detect which slide numbers contain each section"""
+    """Auto-detect which slide numbers contain each section (slide 1 fixed, rest by keyword)"""
     prs = Presentation(pptx_path)
-    result = {"map": 4, "surv": None, "des": None, "cross": None,
-              "vol": None, "boq": None, "letter1": 2, "letter2": 3}
+    result = {"map": None, "surv": None, "des": None, "cross": None,
+              "vol": None, "boq": None, "letter1": None, "letter2": None}
 
     keywords = {
-        "ตารางการสำรวจ": "surv",
-        "ตารางการออกแบบ": "des",
-        "รูปตัดตามขวาง": "cross",
-        "ตารางคำนวณปริมาตร": "vol",
-        "แบบสรุปราคา": "boq",
+        "50,000":                       "map",
+        "หนังสือขอรับการสนับสนุน":      "letter1",
+        "หนังสือตรวจสอบความซ้ำซ้อน":   "letter2",
+        "ตารางการสำรวจ":                "surv",
+        "ตารางการออกแบบ":               "des",
+        "รูปตัดตามขวาง":                "cross",
+        "ตารางคำนวณปริมาตร":            "vol",
+        "แบบสรุปราคา":                  "boq",
     }
 
     for i, slide in enumerate(prs.slides, 1):
+        if i == 1:
+            continue  # สไลด์ 1 คือหน้าปก ข้ามเสมอ
         text = " ".join(s.text for s in slide.shapes if hasattr(s, "text"))
         for kw, key in keywords.items():
             if kw in text and result[key] is None:
