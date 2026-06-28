@@ -57,12 +57,6 @@
     transition: border-color 0.2s;
   }
   input[type="file"]:hover { border-color: #0b1464; }
-  .photo-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr 1fr;
-    gap: 12px;
-  }
-  .photo-item label { font-size: 13px; }
   .btn {
     width: 100%;
     padding: 14px;
@@ -134,26 +128,6 @@
       <label>ภาพแผนที่ 1:50,000 <span class="optional">(แนะนำ — Export PNG จาก PowerPoint เพื่อความถูกต้อง)</span></label>
       <small style="color:#666;display:block;margin-bottom:6px">PowerPoint → คลิกขวาสไลด์แผนที่ → Save Slide As Picture → PNG</small>
       <input type="file" name="map_image" accept="image/*">
-    </div>
-
-    <hr class="divider">
-
-    <div class="form-group">
-      <label>รูปภาพสถานที่ <span class="required">*</span></label>
-      <div class="photo-grid">
-        <div class="photo-item">
-          <label>ก่อนปฏิบัติงาน</label>
-          <input type="file" name="photo_before" accept="image/*">
-        </div>
-        <div class="photo-item">
-          <label>ระหว่างปฏิบัติงาน</label>
-          <input type="file" name="photo_during" accept="image/*">
-        </div>
-        <div class="photo-item">
-          <label>หลังปฏิบัติงาน</label>
-          <input type="file" name="photo_after" accept="image/*">
-        </div>
-      </div>
     </div>
 
     <button type="submit" class="btn" id="submitBtn">

@@ -265,11 +265,64 @@ def detect_slide_map(pptx_path):
     return result
 
 
-def build_board(pptx_path, photo_before, photo_during, photo_after,
-                work_dir, output_path, logo_path=None, map_override=None):
+def extract_photos_from_pptx(pptx_path, work_dir):
+    """
+    หาสไลด์ที่มี text label ก่อน/ระหว่าง/หลัง แล้ว match รูปภาพตามตำแหน่ง X
+    Returns: (before_path, during_path, after_path)
+    """
+    prs = Presentation(pptx_path)
+    LABELS = {"ก่อน": None, "ระหว่าง": None, "หลัง": None}
+
+    # หาสไลด์ที่มีทั้ง 3 คำ
+    photo_slide = None
+    for slide in prs.slides:
+        text_all = " ".join(s.text for s in slide.shapes if hasattr(s, "text"))
+        if all(kw in text_all for kw in LABELS):
+            photo_slide = slide
+            break
+
+    if not photo_slide:
+        print("  Photo slide not found — no photos")
+        return None, None, None
+
+    # หาตำแหน่ง X กึ่งกลางของแต่ละ label
+    label_x = {}
+    for shape in photo_slide.shapes:
+        if not hasattr(shape, "text"):
+            continue
+        for kw in LABELS:
+            if kw in shape.text and kw not in label_x:
+                label_x[kw] = (shape.left or 0) + (shape.width or 0) // 2
+
+    # หารูปภาพทั้งหมดในสไลด์ พร้อม X กึ่งกลาง
+    images = []
+    for shape in photo_slide.shapes:
+        if shape.shape_type == 13:
+            cx = (shape.left or 0) + (shape.width or 0) // 2
+            images.append((cx, shape.image.blob, shape.image.ext))
+    images.sort(key=lambda x: x[0])
+
+    if not images:
+        print("  No images found in photo slide")
+        return None, None, None
+
+    # Match: label กับ image ที่ใกล้ที่สุด (ตาม X)
+    result = {}
+    for kw, lx in label_x.items():
+        closest = min(images, key=lambda img: abs(img[0] - lx))
+        fname = os.path.join(work_dir, f"photo_{kw}.{closest[2]}")
+        with open(fname, "wb") as f:
+            f.write(closest[1])
+        result[kw] = fname
+        print(f"  Photo '{kw}' → {fname}")
+
+    return result.get("ก่อน"), result.get("ระหว่าง"), result.get("หลัง")
+
+
+def build_board(pptx_path, work_dir, output_path, map_override=None):
     # Always use built-in logo
     logo_path = os.path.join(BASE_DIR, "fonts", "logo.png")
-    """Main function: build board from PPTX + 3 photos"""
+    """Main function: build board from PPTX (photos extracted automatically)"""
 
     os.makedirs(work_dir, exist_ok=True)
     med_dir = os.path.join(work_dir, "media")
@@ -278,12 +331,13 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
     cfg = detect_slide_map(pptx_path)
     print(f"Slide map: {cfg}")
 
-    # 2. Extract media from key slides
-    key_slides = list(set([2, 3, cfg["map"], cfg["surv"], cfg["des"],
-                            cfg["cross"], cfg["vol"], cfg["boq"]] if None not in
-                           [cfg["surv"], cfg["des"], cfg["cross"], cfg["vol"], cfg["boq"]]
-                           else [2, 3, cfg["map"]]))
-    extract_media(pptx_path, med_dir, key_slides)
+    # 2. Extract photos from PPTX automatically
+    photo_before, photo_during, photo_after = extract_photos_from_pptx(pptx_path, work_dir)
+
+    # 3. Extract media from key slides
+    key_slides = [s for s in [cfg["map"], cfg["letter1"], cfg["letter2"], cfg["surv"],
+                               cfg["des"], cfg["cross"], cfg["vol"], cfg["boq"]] if s]
+    extract_media(pptx_path, med_dir, list(set(key_slides)))
 
     # 3. Find image files for each section
     def find_img(si, prefer_tall=False):

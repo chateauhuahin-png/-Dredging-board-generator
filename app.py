@@ -34,28 +34,19 @@ def generate():
     os.makedirs(work_dir, exist_ok=True)
 
     try:
-        pptx_file    = request.files.get("pptx")
-        photo_before = request.files.get("photo_before")
-        photo_during = request.files.get("photo_during")
-        photo_after  = request.files.get("photo_after")
-        map_file     = request.files.get("map_image")
+        pptx_file = request.files.get("pptx")
+        map_file  = request.files.get("map_image")
 
         if not pptx_file:
             return jsonify({"error": "กรุณาอัปโหลดไฟล์ PPTX"}), 400
 
-        pptx_path    = save_upload(pptx_file,    work_dir, "input.pptx")
-        before_path  = save_upload(photo_before,  work_dir, "before.jpg")
-        during_path  = save_upload(photo_during,  work_dir, "during.jpg")
-        after_path   = save_upload(photo_after,   work_dir, "after.jpg")
-        map_path     = save_upload(map_file,      work_dir, "map_override.png") if map_file and map_file.filename else None
+        pptx_path = save_upload(pptx_file, work_dir, "input.pptx")
+        map_path  = save_upload(map_file, work_dir, "map_override.png") if map_file and map_file.filename else None
 
         output_path = os.path.join(OUTPUT_DIR, f"board_{job_id}.jpg")
 
         build_board(
             pptx_path=pptx_path,
-            photo_before=before_path,
-            photo_during=during_path,
-            photo_after=after_path,
             work_dir=work_dir,
             output_path=output_path,
             map_override=map_path,
