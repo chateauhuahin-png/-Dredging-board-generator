@@ -330,14 +330,14 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
 
     # Header
     draw.rectangle([MG, MG, W-MG, MG+HDR], fill=NAVY)
-    logo_sz = 340
+    logo_sz = 680
 
-    # Logo — มุมบนซ้าย (paste with transparency)
+    # Logo — มุมบนซ้าย (paste with transparency, cap height to HDR)
     if logo_path and os.path.exists(logo_path):
         try:
             lg_img = Image.open(logo_path).convert("RGBA")
             lw, lh_img = lg_img.size
-            sc = min(logo_sz / lw, logo_sz / lh_img)
+            sc = min(logo_sz / lw, (HDR - 20) / lh_img)
             nw, nh = int(lw * sc), int(lh_img * sc)
             lg_img = lg_img.resize((nw, nh), Image.LANCZOS)
             lx = XL + (logo_sz - nw) // 2
@@ -357,8 +357,8 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
     ay = MG + (HDR - ah) // 2
     draw.text((ax, ay), agency_text, font=fa, fill=WHITE)
 
-    t1sz = 128 if len(title1) < 60 else 116
-    f1 = fnt(t1sz, True); f2 = fnt(100)
+    t1sz = 148 if len(title1) < 60 else 132
+    f1 = fnt(t1sz, True); f2 = fnt(114)
     cx = W // 2
     bb1 = draw.textbbox((0,0), title1, font=f1)
     bb2 = draw.textbbox((0,0), title2, font=f2)
