@@ -246,7 +246,7 @@ def detect_slide_map(pptx_path):
     keywords = {
         "50,000":                       "map",
         "หนังสือขอรับการสนับสนุน":      "letter1",
-        "หนังสือตรวจสอบความซ้ำซ้อน":   "letter2",
+        "ซ้ำซ้อน":                       "letter2",
         "ตารางการสำรวจ":                "surv",
         "ตารางการออกแบบ":               "des",
         "รูปตัดตามขวาง":                "cross",
@@ -462,15 +462,13 @@ def build_board(pptx_path, work_dir, output_path, map_override=None):
 
     ly = CONY + ch + GAP
     lh = int(CONH * 0.37)
-    LW2 = (CR - GAP) // 2
     draw.rectangle([XR, ly, XR+CR, ly+LH], fill=NAVY)
-    lbl = "หนังสือรับรองการดำเนินงาน / ตรวจสอบความซ้ำซ้อน"
+    lbl = "หนังสือตรวจสอบความซ้ำซ้อน"
     fl = fnt(66, True)
     bb = draw.textbbox((0,0), lbl, font=fl)
     draw.text((XR+(CR-(bb[2]-bb[0]))//2, ly+(LH-(bb[3]-bb[1]))//2),
               lbl, font=fl, fill=GOLD)
-    if lett1_img: board.paste(fit(lett1_img, LW2, lh-LH), (XR,          ly+LH))
-    if lett2_img: board.paste(fit(lett2_img, LW2, lh-LH), (XR+LW2+GAP, ly+LH))
+    if lett2_img: board.paste(fit(lett2_img, CR, lh-LH), (XR, ly+LH))
 
     vy = ly + lh + GAP
     sec(draw, board, "ตารางคำนวณปริมาตรดินตะกอน", vol_img, XR, vy, CR, CONH-ch-GAP-lh-GAP)
