@@ -367,8 +367,8 @@ def build_board(pptx_path, photo_before, photo_during, photo_after,
 
     # Left column
     boq_h = int(CONH * 0.54)
-    sec(draw, board, "แบบสรุปรายงานขุดลอกลำน้ำ", boq_img,   XL, CONY, CL, boq_h)
-    sec(draw, board, "รายละเอียดราคากลาง",         price_img, XL, CONY+boq_h+GAP, CL, CONH-boq_h-GAP)
+    sec(draw, board, "ประมาณการ (ปร.6)", boq_img,   XL, CONY, CL, boq_h)
+    sec(draw, board, "ประมาณการ (ปร.4)", price_img, XL, CONY+boq_h+GAP, CL, CONH-boq_h-GAP)
 
     # Middle column
     map_h = int(CONH * 0.50)
