@@ -35,21 +35,17 @@ def generate():
 
     try:
         pptx_file = request.files.get("pptx")
-        map_file  = request.files.get("map_image")
 
         if not pptx_file:
             return jsonify({"error": "กรุณาอัปโหลดไฟล์ PPTX"}), 400
 
         pptx_path = save_upload(pptx_file, work_dir, "input.pptx")
-        map_path  = save_upload(map_file, work_dir, "map_override.png") if map_file and map_file.filename else None
-
         output_path = os.path.join(OUTPUT_DIR, f"board_{job_id}.jpg")
 
         build_board(
             pptx_path=pptx_path,
             work_dir=work_dir,
             output_path=output_path,
-            map_override=map_path,
         )
 
         return jsonify({"job_id": job_id, "url": f"/download/{job_id}"})

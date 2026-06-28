@@ -319,7 +319,7 @@ def extract_photos_from_pptx(pptx_path, work_dir):
     return result.get("ก่อน"), result.get("ระหว่าง"), result.get("หลัง")
 
 
-def build_board(pptx_path, work_dir, output_path, map_override=None):
+def build_board(pptx_path, work_dir, output_path):
     # Always use built-in logo
     logo_path = os.path.join(BASE_DIR, "fonts", "logo.png")
     """Main function: build board from PPTX (photos extracted automatically)"""
@@ -376,14 +376,10 @@ def build_board(pptx_path, work_dir, output_path, map_override=None):
         return tall[0][0], wide[0][0]
 
     # 4. Render map slide
-    if map_override and os.path.exists(map_override):
-        print("Using map_override image")
-        map_jpg = map_override
-    else:
-        print("Rendering map slide...")
-        map_jpg = render_map_slide(pptx_path, cfg["map"], work_dir)
-        if not map_jpg:
-            map_jpg = find_img(cfg["map"])
+    print("Rendering map slide...")
+    map_jpg = render_map_slide(pptx_path, cfg["map"], work_dir)
+    if not map_jpg:
+        map_jpg = find_img(cfg["map"])
 
     # 5. Get title and agency name
     title1, title2, agency = get_title_from_pptx(pptx_path)
