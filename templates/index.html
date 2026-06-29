@@ -23,98 +23,51 @@
     max-width: 600px;
     box-shadow: 0 8px 32px rgba(0,0,0,0.3);
   }
-  h1 {
-    color: #0b1464;
-    font-size: 24px;
-    text-align: center;
-    margin-bottom: 8px;
-  }
-  .subtitle {
-    color: #666;
-    text-align: center;
-    font-size: 14px;
-    margin-bottom: 32px;
-  }
+  h1 { color: #0b1464; font-size: 24px; text-align: center; margin-bottom: 8px; }
+  .subtitle { color: #666; text-align: center; font-size: 14px; margin-bottom: 32px; }
   .form-group { margin-bottom: 20px; }
-  label {
-    display: block;
-    font-weight: bold;
-    color: #0b1464;
-    margin-bottom: 6px;
-    font-size: 15px;
-  }
+  label { display: block; font-weight: bold; color: #0b1464; margin-bottom: 6px; font-size: 15px; }
   .required { color: #e53e3e; }
   input[type="file"] {
-    width: 100%;
-    padding: 10px 12px;
-    border: 2px dashed #cbd5e0;
-    border-radius: 8px;
-    cursor: pointer;
-    font-size: 14px;
-    transition: border-color 0.2s;
+    width: 100%; padding: 10px 12px;
+    border: 2px dashed #cbd5e0; border-radius: 8px;
+    cursor: pointer; font-size: 14px; transition: border-color 0.2s;
   }
   input[type="file"]:hover { border-color: #0b1464; }
   .btn {
-    width: 100%;
-    padding: 14px;
-    background: #0b1464;
-    color: #ffd700;
-    border: none;
-    border-radius: 8px;
-    font-size: 18px;
-    font-weight: bold;
-    cursor: pointer;
-    margin-top: 8px;
-    transition: background 0.2s;
+    width: 100%; padding: 14px;
+    background: #0b1464; color: #ffd700;
+    border: none; border-radius: 8px;
+    font-size: 18px; font-weight: bold;
+    cursor: pointer; margin-top: 8px; transition: background 0.2s;
   }
   .btn:hover { background: #1a2a9b; }
   .btn:disabled { background: #a0aec0; cursor: not-allowed; }
   .status {
-    margin-top: 20px;
-    padding: 16px;
-    border-radius: 8px;
-    text-align: center;
-    font-size: 16px;
-    display: none;
+    margin-top: 20px; padding: 16px;
+    border-radius: 8px; text-align: center;
+    font-size: 16px; display: none;
   }
   .status.loading { background: #ebf8ff; color: #2b6cb0; display: block; }
   .status.success { background: #f0fff4; color: #276749; display: block; }
   .status.error   { background: #fff5f5; color: #c53030; display: block; }
   .download-btn {
-    display: inline-block;
-    margin-top: 12px;
-    padding: 10px 24px;
-    background: #276749;
-    color: white;
-    border-radius: 6px;
-    text-decoration: none;
-    font-weight: bold;
-    font-size: 16px;
+    display: inline-block; margin-top: 12px;
+    padding: 10px 24px; background: #276749;
+    color: white; border-radius: 6px;
+    text-decoration: none; font-weight: bold; font-size: 16px;
   }
-  .progress-bar-wrap {
-    width: 100%;
-    background: #bee3f8;
-    border-radius: 6px;
-    height: 10px;
-    margin-top: 12px;
-    overflow: hidden;
-    display: none;
+  .progress-wrap {
+    width: 100%; background: #bee3f8;
+    border-radius: 6px; height: 10px;
+    margin-top: 12px; overflow: hidden; display: none;
   }
-  .progress-bar {
-    height: 100%;
-    background: #2b6cb0;
-    width: 0%;
-    transition: width 0.3s;
-  }
+  .progress-bar { height: 100%; background: #2b6cb0; width: 0%; transition: width 0.3s; }
   .spinner {
-    display: inline-block;
-    width: 20px; height: 20px;
-    border: 3px solid #bee3f8;
-    border-top-color: #2b6cb0;
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-    vertical-align: middle;
-    margin-right: 8px;
+    display: inline-block; width: 20px; height: 20px;
+    border: 3px solid #bee3f8; border-top-color: #2b6cb0;
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+    vertical-align: middle; margin-right: 8px;
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 </style>
@@ -132,22 +85,22 @@
     <button type="submit" class="btn" id="submitBtn">สร้างบอร์ดชี้แจง</button>
   </form>
 
-  <div class="progress-bar-wrap" id="progressWrap">
+  <div class="progress-wrap" id="progressWrap">
     <div class="progress-bar" id="progressBar"></div>
   </div>
   <div class="status" id="status"></div>
 </div>
 
 <script>
-const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB per chunk
+const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB
 
 document.getElementById("boardForm").addEventListener("submit", async function(e) {
   e.preventDefault();
 
-  const btn = document.getElementById("submitBtn");
-  const statusEl = document.getElementById("status");
+  const btn        = document.getElementById("submitBtn");
+  const statusEl   = document.getElementById("status");
   const progressWrap = document.getElementById("progressWrap");
-  const progressBar = document.getElementById("progressBar");
+  const progressBar  = document.getElementById("progressBar");
   const file = document.getElementById("pptxInput").files[0];
 
   if (!file) {
@@ -160,18 +113,18 @@ document.getElementById("boardForm").addEventListener("submit", async function(e
   progressWrap.style.display = "block";
   progressBar.style.width = "0%";
   statusEl.className = "status loading";
-  statusEl.innerHTML = '<span class="spinner"></span>กำลังอัปโหลดไฟล์...';
+  statusEl.innerHTML = '<span class="spinner"></span>กำลังเริ่มต้น...';
 
   try {
-    // Step 1: Start upload session
+    // 1. Start upload session
     const startRes = await fetch("/upload/start", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({ filename: file.name, size: file.size })
+      body: JSON.stringify({ filename: file.name })
     });
     const { upload_id } = await startRes.json();
 
-    // Step 2: Upload chunks
+    // 2. Upload chunks
     const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
     for (let i = 0; i < totalChunks; i++) {
       const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
@@ -184,36 +137,59 @@ document.getElementById("boardForm").addEventListener("submit", async function(e
       const res = await fetch("/upload/chunk", { method: "POST", body: fd });
       if (!res.ok) throw new Error("อัปโหลด chunk ล้มเหลว");
 
-      const pct = Math.round(((i + 1) / totalChunks) * 70);
+      const pct = Math.round(((i + 1) / totalChunks) * 60);
       progressBar.style.width = pct + "%";
       statusEl.innerHTML = `<span class="spinner"></span>กำลังอัปโหลด... ${pct}%`;
     }
 
-    // Step 3: Generate board
-    statusEl.innerHTML = '<span class="spinner"></span>กำลังสร้างบอร์ด... อาจใช้เวลา 1-2 นาที';
-    progressBar.style.width = "80%";
+    // 3. Start generating (returns immediately with job_id)
+    progressBar.style.width = "65%";
+    statusEl.innerHTML = '<span class="spinner"></span>กำลังสร้างบอร์ด...';
 
     const genRes = await fetch("/generate", {
       method: "POST",
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ upload_id })
     });
-    const data = await genRes.json();
+    const genData = await genRes.json();
+    if (!genRes.ok) throw new Error(genData.error || "เริ่มสร้างบอร์ดไม่สำเร็จ");
 
-    progressBar.style.width = "100%";
+    const job_id = genData.job_id;
 
-    if (genRes.ok && data.url) {
-      statusEl.className = "status success";
-      statusEl.innerHTML = `✅ สร้างบอร์ดสำเร็จ!<br>
-        <a class="download-btn" href="${data.url}">⬇️ ดาวน์โหลด JPG</a>`;
-    } else {
-      statusEl.className = "status error";
-      statusEl.innerHTML = `❌ เกิดข้อผิดพลาด: ${data.error || "ไม่ทราบสาเหตุ"}`;
-    }
+    // 4. Poll status every 3 seconds
+    let dots = 0;
+    const poll = setInterval(async () => {
+      try {
+        const sRes = await fetch(`/status/${job_id}`);
+        const sData = await sRes.json();
+
+        if (sData.status === "done") {
+          clearInterval(poll);
+          progressBar.style.width = "100%";
+          statusEl.className = "status success";
+          statusEl.innerHTML = `✅ สร้างบอร์ดสำเร็จ!<br>
+            <a class="download-btn" href="${sData.url}">⬇️ ดาวน์โหลด JPG</a>`;
+          btn.disabled = false;
+        } else if (sData.status === "error") {
+          clearInterval(poll);
+          statusEl.className = "status error";
+          statusEl.innerHTML = `❌ เกิดข้อผิดพลาด: ${sData.error}`;
+          btn.disabled = false;
+        } else {
+          // still processing
+          dots = (dots + 1) % 4;
+          const d = ".".repeat(dots + 1);
+          progressBar.style.width = Math.min(65 + dots * 8, 95) + "%";
+          statusEl.innerHTML = `<span class="spinner"></span>กำลังสร้างบอร์ด${d}`;
+        }
+      } catch (err) {
+        // network hiccup — keep polling
+      }
+    }, 3000);
+
   } catch (err) {
     statusEl.className = "status error";
     statusEl.innerHTML = `❌ เกิดข้อผิดพลาด: ${err.message}`;
-  } finally {
     btn.disabled = false;
   }
 });
