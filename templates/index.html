@@ -151,7 +151,14 @@ document.getElementById("boardForm").addEventListener("submit", async function(e
       headers: {"Content-Type": "application/json"},
       body: JSON.stringify({ upload_id })
     });
-    const genData = await genRes.json();
+
+    let genData;
+    try {
+      genData = await genRes.json();
+    } catch (parseErr) {
+      const rawText = await genRes.text().catch(() => "(empty)");
+      throw new Error(`HTTP ${genRes.status} — server response: ${rawText.substring(0, 200)}`);
+    }
     if (!genRes.ok) throw new Error(genData.error || "เริ่มสร้างบอร์ดไม่สำเร็จ");
 
     const job_id = genData.job_id;

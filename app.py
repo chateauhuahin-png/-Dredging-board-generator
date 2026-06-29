@@ -73,21 +73,24 @@ def _run_build(upload_id):
 
 @app.route("/generate", methods=["POST"])
 def generate():
-    data = request.get_json()
-    upload_id = data.get("upload_id") if data else None
+    try:
+        data = request.get_json(force=True, silent=True) or {}
+        upload_id = data.get("upload_id")
 
-    if not upload_id:
-        return jsonify({"error": "ไม่พบ upload_id"}), 400
+        if not upload_id:
+            return jsonify({"error": "ไม่พบ upload_id"}), 400
 
-    session_dir = os.path.join(UPLOAD_DIR, upload_id)
-    if not os.path.isdir(session_dir):
-        return jsonify({"error": "ไม่พบไฟล์อัปโหลด"}), 404
+        session_dir = os.path.join(UPLOAD_DIR, upload_id)
+        if not os.path.isdir(session_dir):
+            return jsonify({"error": f"ไม่พบ session dir: {session_dir}"}), 404
 
-    jobs[upload_id] = {"status": "processing"}
-    t = threading.Thread(target=_run_build, args=(upload_id,), daemon=True)
-    t.start()
+        jobs[upload_id] = {"status": "processing"}
+        t = threading.Thread(target=_run_build, args=(upload_id,), daemon=True)
+        t.start()
 
-    return jsonify({"job_id": upload_id})  # ← return ทันที
+        return jsonify({"job_id": upload_id})
+    except Exception as e:
+        return jsonify({"error": f"generate error: {str(e)}"}), 500
 
 
 @app.route("/status/<job_id>")
