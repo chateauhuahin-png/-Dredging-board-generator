@@ -136,24 +136,47 @@ def render_map_slide(pptx_path, slide_idx, work_dir):
     except Exception as e:
         print(f"  Graph API error: {e}, falling back to LibreOffice")
 
-    # ── Priority 2: LibreOffice composite render ──────────────────────────────
-    single_pptx, sw, sh = extract_single_slide(pptx_path, slide_idx, work_dir)
+    # ── Priority 2: LibreOffice composite render (only if Graph API available) ──
+    # Skip LibreOffice if Graph API is not configured — it's too slow on cloud
+    try:
+        from graph_convert import is_configured as _gc
+        if not _gc():
+            print("  Graph API not configured — skipping LibreOffice, using find_img fallback")
+            return None
+    except Exception:
+        return None
+
+    try:
+        single_pptx, sw, sh = extract_single_slide(pptx_path, slide_idx, work_dir)
+    except Exception as e:
+        print(f"  extract_single_slide error: {e}")
+        return None
 
     OUT_W = 1800
     scale = OUT_W / sw
     OUT_H = int(sh * scale)
 
-    # ── Step 1: PPTX → ODP → PNG (ODP เป็น format ของ LibreOffice เอง render ได้ดีกว่า) ──
-    subprocess.run(
-        ["soffice", "--headless", "--convert-to", "odp", single_pptx, "--outdir", work_dir],
-        capture_output=True, timeout=60
-    )
+    # ── Step 1: PPTX → ODP → PNG ──────────────────────────────────────────────
+    try:
+        subprocess.run(
+            ["soffice", "--headless", "--convert-to", "odp", single_pptx, "--outdir", work_dir],
+            capture_output=True, timeout=180
+        )
+    except Exception as e:
+        print(f"  LibreOffice PPTX→ODP error: {e}")
+        return None
+
     odp_path = os.path.join(work_dir, "map_single.odp")
     render_src = odp_path if os.path.exists(odp_path) else single_pptx
-    subprocess.run(
-        ["soffice", "--headless", "--convert-to", "png", render_src, "--outdir", work_dir],
-        capture_output=True, timeout=60
-    )
+
+    try:
+        subprocess.run(
+            ["soffice", "--headless", "--convert-to", "png", render_src, "--outdir", work_dir],
+            capture_output=True, timeout=180
+        )
+    except Exception as e:
+        print(f"  LibreOffice ODP→PNG error: {e}")
+        return None
     lo_png = os.path.join(work_dir, "map_single.png")
     if os.path.exists(lo_png):
         base = Image.open(lo_png).convert("RGB").resize((OUT_W, OUT_H), Image.LANCZOS)
