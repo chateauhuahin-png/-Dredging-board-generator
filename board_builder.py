@@ -68,6 +68,27 @@ def sec(draw, board, label, img_path, x, y, w, h, lsz=76):
         draw.rectangle([x, y+LH, x+w, y+h], fill=WHITE)
 
 
+def sec_multi(draw, board, label, img_paths, x, y, w, h, lsz=76):
+    """Section with multiple images stacked vertically"""
+    draw.rectangle([x, y, x+w, y+LH], fill=NAVY)
+    f = fnt(lsz, bold=True)
+    bb = draw.textbbox((0, 0), label, font=f)
+    draw.text((x + (w-(bb[2]-bb[0]))//2, y + (LH-(bb[3]-bb[1]))//2),
+              label, font=f, fill=GOLD)
+    valid = [p for p in img_paths if p and os.path.exists(p)]
+    if not valid:
+        draw.rectangle([x, y+LH, x+w, y+h], fill=WHITE)
+        return
+    n = len(valid)
+    slot_h = (h - LH) // n
+    for i, p in enumerate(valid):
+        tile = fit(p, w, slot_h)
+        board.paste(tile, (x, y + LH + i * slot_h))
+        tile.close()
+        del tile
+    gc.collect()
+
+
 def extract_media(pptx_path, out_dir, slide_indices):
     """Extract images from specific slides (1-based index)"""
     os.makedirs(out_dir, exist_ok=True)
@@ -376,7 +397,7 @@ def build_board(pptx_path, work_dir, output_path):
 
     # 3. Find image files for each section
     def find_img(si):
-        """Find best image for slide si — returns None if si is None or no image found"""
+        """Find best (largest) image for slide si"""
         if si is None:
             return None
         candidates = []
@@ -385,13 +406,31 @@ def build_board(pptx_path, work_dir, output_path):
                 p = os.path.join(med_dir, f)
                 try:
                     img = Image.open(p)
-                    candidates.append((p, img.size))
+                    candidates.append((p, img.size[0]*img.size[1]))
+                    img.close()
                 except Exception:
                     pass
         if not candidates:
             return None
-        candidates.sort(key=lambda x: x[1][0]*x[1][1], reverse=True)
+        candidates.sort(key=lambda x: x[1], reverse=True)
         return candidates[0][0]
+
+    def find_all_imgs(si):
+        """Find ALL images for slide si sorted by area (largest first)"""
+        if si is None:
+            return []
+        candidates = []
+        for f in sorted(os.listdir(med_dir)):
+            if f.startswith(f"s{si:02d}_"):
+                p = os.path.join(med_dir, f)
+                try:
+                    img = Image.open(p)
+                    candidates.append((p, img.size[0]*img.size[1]))
+                    img.close()
+                except Exception:
+                    pass
+        candidates.sort(key=lambda x: x[1], reverse=True)
+        return [p for p, _ in candidates]
 
     def find_boq_imgs(si):
         """BOQ slide has 2 images: tall one = ปร.6, wide one = ปร.4"""
@@ -428,11 +467,11 @@ def build_board(pptx_path, work_dir, output_path):
     # ── 3. Logo ──────────────────────────────────────────────────────────
 
     boq_img, price_img = find_boq_imgs(cfg["boq"])
-    surv_img  = find_img(cfg["surv"])
-    des_img   = find_img(cfg["des"])
-    cross_img = find_img(cfg["cross"])
-    vol_img   = find_img(cfg["vol"])
-    lett2_img = find_img(cfg["letter2"]) if cfg["letter2"] else None
+    surv_imgs  = find_all_imgs(cfg["surv"])    # ← หลายรูป
+    des_img    = find_img(cfg["des"])
+    cross_imgs = find_all_imgs(cfg["cross"])   # ← หลายรูป
+    vol_img    = find_img(cfg["vol"])
+    lett2_imgs = find_all_imgs(cfg["letter2"]) if cfg["letter2"] else []  # ← หลายรูป
 
     # 7. Build board
     board = Image.new("RGB", (W, H), NAVY)
@@ -486,22 +525,16 @@ def build_board(pptx_path, work_dir, output_path):
         map_jpg, XM, CONY, CM, map_h, lsz=68)
     sy = CONY + map_h + GAP
     sh = int(CONH * 0.265)
-    sec(draw, board, "ตารางการสำรวจ",    surv_img, XM, sy,          CM, sh)
-    sec(draw, board, "ตารางการออกแบบ",   des_img,  XM, sy+sh+GAP,   CM, CONH-map_h-GAP-sh-GAP)
+    sec_multi(draw, board, "ตารางการสำรวจ",    surv_imgs, XM, sy,          CM, sh)
+    sec(draw, board, "ตารางการออกแบบ",         des_img,   XM, sy+sh+GAP,   CM, CONH-map_h-GAP-sh-GAP)
 
     # Right column
     ch = int(CONH * 0.375)
-    sec(draw, board, "รูปตัดตามขวางขุดลอกลำน้ำ", cross_img, XR, CONY, CR, ch)
+    sec_multi(draw, board, "รูปตัดตามขวางขุดลอกลำน้ำ", cross_imgs, XR, CONY, CR, ch)
 
     ly = CONY + ch + GAP
     lh = int(CONH * 0.37)
-    draw.rectangle([XR, ly, XR+CR, ly+LH], fill=NAVY)
-    lbl = "หนังสือตรวจสอบความซ้ำซ้อน"
-    fl = fnt(66, True)
-    bb = draw.textbbox((0,0), lbl, font=fl)
-    draw.text((XR+(CR-(bb[2]-bb[0]))//2, ly+(LH-(bb[3]-bb[1]))//2),
-              lbl, font=fl, fill=GOLD)
-    if lett2_img: board.paste(fit(lett2_img, CR, lh-LH), (XR, ly+LH))
+    sec_multi(draw, board, "หนังสือตรวจสอบความซ้ำซ้อน", lett2_imgs, XR, ly, CR, lh, lsz=66)
 
     vy = ly + lh + GAP
     sec(draw, board, "ตารางคำนวณปริมาตรดินตะกอน", vol_img, XR, vy, CR, CONH-ch-GAP-lh-GAP)
