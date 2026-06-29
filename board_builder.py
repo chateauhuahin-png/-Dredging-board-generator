@@ -11,8 +11,8 @@ BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
 FONT_BOLD = os.path.join(BASE_DIR, "fonts", "THSarabun Bold.ttf")
 FONT_REG  = os.path.join(BASE_DIR, "fonts", "THSarabun.ttf")
 
-# 100 DPI @ 120×80 cm  (ลดจาก 150 DPI เพื่อประหยัด RAM — ยังพอสำหรับ large-format print)
-W, H   = 4724, 3149
+# 150 DPI @ 120×80 cm
+W, H   = 7087, 4724
 NAVY   = (11, 20, 100)
 GOLD   = (255, 215, 0)
 WHITE  = (255, 255, 255)
