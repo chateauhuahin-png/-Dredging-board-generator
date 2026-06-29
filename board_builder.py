@@ -435,12 +435,59 @@ def _parse_pptx_once(pptx_path, work_dir, med_dir):
     for si in key_slides:
         _extract(prs.slides[si-1].shapes, f"s{si:02d}")
 
+    # ── PIL composite for map slide (while PPTX still open) ──────────────
+    import io as _io
+    map_composite = None
+    if cfg["map"]:
+        try:
+            slide  = prs.slides[cfg["map"] - 1]
+            sw     = prs.slide_width
+            sh_emu = prs.slide_height
+            OUT_W  = 2400
+            sc     = OUT_W / sw
+            OUT_H  = int(sh_emu * sc)
+            base   = Image.new("RGB", (OUT_W, OUT_H), (255, 255, 255))
+
+            def _paste_pics(shapes, ox=0, oy=0, sx=1.0, sy=1.0):
+                for s in shapes:
+                    try:
+                        ax = ox + (s.left  or 0) * sx
+                        ay = oy + (s.top   or 0) * sy
+                        aw = (s.width  or 0) * sx
+                        ah = (s.height or 0) * sy
+                    except Exception:
+                        continue
+                    if s.shape_type == 13 and aw > 0 and ah > 0:
+                        try:
+                            px_, py_ = int(ax * sc), int(ay * sc)
+                            pw,  ph  = int(aw * sc), int(ah * sc)
+                            im = Image.open(_io.BytesIO(s.image.blob)).convert("RGBA")
+                            im = im.resize((pw, ph), Image.LANCZOS)
+                            bg = Image.new("RGB", (pw, ph), (255, 255, 255))
+                            bg.paste(im, mask=im.split()[3])
+                            base.paste(bg, (px_, py_))
+                            im.close(); bg.close(); del im, bg
+                        except Exception as e:
+                            print(f"    map pic: {e}")
+                    elif s.shape_type == 6:
+                        _paste_pics(s.shapes, ax, ay, sx, sy)
+
+            _paste_pics(slide.shapes)
+            map_composite = os.path.join(work_dir, "map_composite.jpg")
+            base.save(map_composite, "JPEG", quality=95)
+            base.close(); del base
+            gc.collect()
+            print("  Map PIL composite saved.")
+        except Exception as e:
+            print(f"  Map composite error: {e}")
+            map_composite = None
+
     # ── close PPTX now — free all memory before building board ───────────
     del prs
     gc.collect()
     print("PPTX closed, memory freed.")
 
-    return cfg, title1, title2, agency, photo_before, photo_during, photo_after
+    return cfg, title1, title2, agency, photo_before, photo_during, photo_after, map_composite
 
 
 def build_board(pptx_path, work_dir, output_path):
@@ -450,7 +497,7 @@ def build_board(pptx_path, work_dir, output_path):
     med_dir = os.path.join(work_dir, "media")
 
     # ── 1. Read ALL data from PPTX in one pass, then close it ────────────
-    cfg, title1, title2, agency, photo_before, photo_during, photo_after = \
+    cfg, title1, title2, agency, photo_before, photo_during, photo_after, map_composite = \
         _parse_pptx_once(pptx_path, work_dir, med_dir)
 
     # 3. Find image files for each section
@@ -511,14 +558,33 @@ def build_board(pptx_path, work_dir, output_path):
         wide = sorted(candidates, key=lambda x: x[1]/max(x[2],1), reverse=True)
         return tall[0][0], wide[0][0]
 
-    # ── 2. Render map slide (Graph API or find_img) ───────────────────────
+    # ── 2. Render map slide: Graph API → map_composite → find_img ────────
     print("Rendering map slide...")
+    map_jpg = None
     if cfg["map"]:
-        map_jpg = render_map_slide(pptx_path, cfg["map"], work_dir)
+        # Try Graph API first (perfect render with text/lines)
+        try:
+            from graph_convert import slide_to_png, is_configured
+            if is_configured():
+                print("  Using Microsoft Graph API...")
+                png = slide_to_png(pptx_path, cfg["map"], work_dir)
+                if png:
+                    map_jpg = os.path.join(work_dir, "map_slide.jpg")
+                    img = Image.open(png).convert("RGB")
+                    img.save(map_jpg, "JPEG", quality=95)
+                    img.close()
+                    print("  Graph API: success")
+        except Exception as e:
+            print(f"  Graph API error: {e}")
+
         if not map_jpg:
-            map_jpg = find_img(cfg["map"])
-    else:
-        map_jpg = None
+            # Use PIL composite (built during PPTX parse, no extra memory)
+            map_jpg = map_composite
+            if map_jpg:
+                print("  Using PIL composite fallback")
+            else:
+                map_jpg = find_img(cfg["map"])
+                print("  Using find_img fallback")
 
     print(f"Title: {title1} / {title2} / Agency: {agency}")
 
