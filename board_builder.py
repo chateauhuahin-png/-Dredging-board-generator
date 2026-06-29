@@ -521,21 +521,16 @@ def build_board(pptx_path, work_dir, output_path):
         return candidates[0][0]
 
     def find_all_imgs(si):
-        """Find ALL images for slide si sorted by area (largest first)"""
+        """Find ALL images for slide si sorted by filename (= X position left→right)"""
         if si is None:
             return []
         candidates = []
-        for f in sorted(os.listdir(med_dir)):
+        for f in sorted(os.listdir(med_dir)):   # sorted() = filename order = left→right
             if f.startswith(f"s{si:02d}_"):
                 p = os.path.join(med_dir, f)
-                try:
-                    img = Image.open(p)
-                    candidates.append((p, img.size[0]*img.size[1]))
-                    img.close()
-                except Exception:
-                    pass
-        candidates.sort(key=lambda x: x[1], reverse=True)
-        return [p for p, _ in candidates]
+                if os.path.exists(p):
+                    candidates.append(p)
+        return candidates
 
     def find_boq_imgs(si):
         """BOQ slide has 2 images: tall one = ปร.6, wide one = ปร.4"""
