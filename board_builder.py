@@ -256,25 +256,123 @@ def extract_photos_from_pptx(pptx_path, work_dir):
     return result.get("ก่อน"), result.get("ระหว่าง"), result.get("หลัง")
 
 
-def build_board(pptx_path, work_dir, output_path):
-    # Always use built-in logo
-    logo_path = os.path.join(BASE_DIR, "fonts", "logo.png")
-    """Main function: build board from PPTX (photos extracted automatically)"""
+def _parse_pptx_once(pptx_path, work_dir, med_dir):
+    """
+    Open PPTX exactly once and extract ALL needed data:
+    - slide map (cfg)
+    - title/agency
+    - photos (before/during/after)
+    - media images for each section
+    Then close PPTX and gc.collect() before heavy image work.
+    """
+    print("Opening PPTX (single pass)...")
+    prs = Presentation(pptx_path)
 
+    # ── slide map ────────────────────────────────────────────────────────────
+    cfg = {"map": None, "surv": None, "des": None, "cross": None,
+           "vol": None, "boq": None, "letter1": None, "letter2": None}
+    keywords = {
+        "50,000": "map", "หนังสือขอรับการสนับสนุน": "letter1",
+        "ซ้ำซ้อน": "letter2", "ตารางการสำรวจ": "surv",
+        "ตารางการออกแบบ": "des", "รูปตัดตามขวาง": "cross",
+        "ตารางคำนวณปริมาตร": "vol", "แบบสรุปราคา": "boq",
+    }
+
+    # ── title/agency from slide 1 ─────────────────────────────────────────
+    title1, title2, agency = "งานขุดลอกลำน้ำ", "", ""
+    slide0 = prs.slides[0]
+    for shape in slide0.shapes:
+        if not hasattr(shape, "text") or not shape.text.strip():
+            continue
+        text = shape.text.strip()
+        if not agency and ("นพค" in text or "นทพ" in text):
+            for line in [l.strip() for l in text.split("\n") if l.strip()]:
+                if "นพค" in line or "นทพ" in line:
+                    agency = line; break
+        if "งานขุด" in text:
+            lines = [l.strip() for l in text.split("\n") if l.strip()]
+            title1 = f"{lines[0]} {lines[1]}" if len(lines) > 1 else lines[0]
+            title2 = lines[2] if len(lines) > 2 else ""
+
+    # ── slide scan (slides 2+) ────────────────────────────────────────────
+    PHOTO_LABELS = {"ก่อน", "ระหว่าง", "หลัง"}
+    photo_slide = None
+    for i, slide in enumerate(prs.slides, 1):
+        if i == 1:
+            continue
+        text_all = " ".join(s.text for s in slide.shapes if hasattr(s, "text"))
+        for kw, key in keywords.items():
+            if kw in text_all and cfg[key] is None:
+                cfg[key] = i
+        if photo_slide is None and all(kw in text_all for kw in PHOTO_LABELS):
+            photo_slide = slide
+
+    print(f"Slide map: {cfg}")
+
+    # ── extract photos ────────────────────────────────────────────────────
+    photo_before = photo_during = photo_after = None
+    if photo_slide:
+        label_x = {}
+        for shape in photo_slide.shapes:
+            if not hasattr(shape, "text"):
+                continue
+            for kw in PHOTO_LABELS:
+                if kw in shape.text and kw not in label_x:
+                    label_x[kw] = (shape.left or 0) + (shape.width or 0) // 2
+        imgs = []
+        for shape in photo_slide.shapes:
+            if shape.shape_type == 13:
+                cx = (shape.left or 0) + (shape.width or 0) // 2
+                imgs.append((cx, shape.image.blob, shape.image.ext))
+        imgs.sort(key=lambda x: x[0])
+        if imgs:
+            res = {}
+            for kw, lx in label_x.items():
+                cl = min(imgs, key=lambda img: abs(img[0] - lx))
+                fname = os.path.join(work_dir, f"photo_{kw}.{cl[2]}")
+                with open(fname, "wb") as f:
+                    f.write(cl[1])
+                res[kw] = fname
+            photo_before = res.get("ก่อน")
+            photo_during = res.get("ระหว่าง")
+            photo_after  = res.get("หลัง")
+        del imgs
+
+    # ── extract media from key slides ─────────────────────────────────────
+    os.makedirs(med_dir, exist_ok=True)
+    def _extract(shapes, prefix):
+        for j, shape in enumerate(shapes):
+            if shape.shape_type == 13:
+                img = shape.image
+                fname = f"{prefix}_{j}.{img.ext}"
+                with open(os.path.join(med_dir, fname), "wb") as f:
+                    f.write(img.blob)
+            elif shape.shape_type == 6:
+                _extract(shape.shapes, f"{prefix}g{j}")
+
+    key_slides = list(set(s for s in [cfg["map"], cfg["letter1"], cfg["letter2"],
+                                       cfg["surv"], cfg["des"], cfg["cross"],
+                                       cfg["vol"], cfg["boq"]] if s))
+    for si in key_slides:
+        _extract(prs.slides[si-1].shapes, f"s{si:02d}")
+
+    # ── close PPTX now — free all memory before building board ───────────
+    del prs
+    gc.collect()
+    print("PPTX closed, memory freed.")
+
+    return cfg, title1, title2, agency, photo_before, photo_during, photo_after
+
+
+def build_board(pptx_path, work_dir, output_path):
+    """Main function: build board from PPTX"""
+    logo_path = os.path.join(BASE_DIR, "fonts", "logo.png")
     os.makedirs(work_dir, exist_ok=True)
     med_dir = os.path.join(work_dir, "media")
 
-    # 1. Detect slides
-    cfg = detect_slide_map(pptx_path)
-    print(f"Slide map: {cfg}")
-
-    # 2. Extract photos from PPTX automatically
-    photo_before, photo_during, photo_after = extract_photos_from_pptx(pptx_path, work_dir)
-
-    # 3. Extract media from key slides
-    key_slides = [s for s in [cfg["map"], cfg["letter1"], cfg["letter2"], cfg["surv"],
-                               cfg["des"], cfg["cross"], cfg["vol"], cfg["boq"]] if s]
-    extract_media(pptx_path, med_dir, list(set(key_slides)))
+    # ── 1. Read ALL data from PPTX in one pass, then close it ────────────
+    cfg, title1, title2, agency, photo_before, photo_during, photo_after = \
+        _parse_pptx_once(pptx_path, work_dir, med_dir)
 
     # 3. Find image files for each section
     def find_img(si):
@@ -316,7 +414,7 @@ def build_board(pptx_path, work_dir, output_path):
         wide = sorted(candidates, key=lambda x: x[1]/max(x[2],1), reverse=True)
         return tall[0][0], wide[0][0]
 
-    # 4. Render map slide
+    # ── 2. Render map slide (Graph API or find_img) ───────────────────────
     print("Rendering map slide...")
     if cfg["map"]:
         map_jpg = render_map_slide(pptx_path, cfg["map"], work_dir)
@@ -325,13 +423,9 @@ def build_board(pptx_path, work_dir, output_path):
     else:
         map_jpg = None
 
-    # 5. Get title and agency name
-    title1, title2, agency = get_title_from_pptx(pptx_path)
-    print(f"Title: {title1}")
-    print(f"Location: {title2}")
-    print(f"Agency: {agency}")
+    print(f"Title: {title1} / {title2} / Agency: {agency}")
 
-    # 6. Logo is already set at function entry
+    # ── 3. Logo ──────────────────────────────────────────────────────────
 
     boq_img, price_img = find_boq_imgs(cfg["boq"])
     surv_img  = find_img(cfg["surv"])
