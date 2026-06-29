@@ -1,7 +1,7 @@
 """
 Board Builder - สร้างบอร์ดชี้แจงจาก PPTX + รูปภาพ
 """
-import os, copy
+import os, copy, gc
 from PIL import Image, ImageDraw, ImageFont, ImageFile
 from pptx import Presentation
 
@@ -11,7 +11,8 @@ BASE_DIR  = os.path.dirname(os.path.abspath(__file__))
 FONT_BOLD = os.path.join(BASE_DIR, "fonts", "THSarabun Bold.ttf")
 FONT_REG  = os.path.join(BASE_DIR, "fonts", "THSarabun.ttf")
 
-W, H   = 7087, 4724
+# 100 DPI @ 120×80 cm  (ลดจาก 150 DPI เพื่อประหยัด RAM — ยังพอสำหรับ large-format print)
+W, H   = 4724, 3149
 NAVY   = (11, 20, 100)
 GOLD   = (255, 215, 0)
 WHITE  = (255, 255, 255)
@@ -44,6 +45,8 @@ def fit(path, w, h, bg=WHITE):
         nw, nh = int(iw * sc), int(ih * sc)
         img = img.resize((nw, nh), Image.LANCZOS)
         canvas.paste(img, ((w - nw) // 2, (h - nh) // 2))
+        img.close()
+        del img
     except Exception as e:
         print(f"  fit error {path}: {e}")
     return canvas
@@ -56,7 +59,11 @@ def sec(draw, board, label, img_path, x, y, w, h, lsz=76):
     draw.text((x + (w-(bb[2]-bb[0]))//2, y + (LH-(bb[3]-bb[1]))//2),
               label, font=f, fill=GOLD)
     if img_path and os.path.exists(img_path):
-        board.paste(fit(img_path, w, h - LH), (x, y + LH))
+        tile = fit(img_path, w, h - LH)
+        board.paste(tile, (x, y + LH))
+        tile.close()
+        del tile
+        gc.collect()
     else:
         draw.rectangle([x, y+LH, x+w, y+h], fill=WHITE)
 
