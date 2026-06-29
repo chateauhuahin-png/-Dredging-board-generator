@@ -69,7 +69,7 @@ def sec(draw, board, label, img_path, x, y, w, h, lsz=76):
 
 
 def sec_multi(draw, board, label, img_paths, x, y, w, h, lsz=76):
-    """Section with multiple images stacked vertically"""
+    """Section with multiple images arranged left to right"""
     draw.rectangle([x, y, x+w, y+LH], fill=NAVY)
     f = fnt(lsz, bold=True)
     bb = draw.textbbox((0, 0), label, font=f)
@@ -80,10 +80,11 @@ def sec_multi(draw, board, label, img_paths, x, y, w, h, lsz=76):
         draw.rectangle([x, y+LH, x+w, y+h], fill=WHITE)
         return
     n = len(valid)
-    slot_h = (h - LH) // n
+    slot_w = w // n
+    img_h  = h - LH
     for i, p in enumerate(valid):
-        tile = fit(p, w, slot_h)
-        board.paste(tile, (x, y + LH + i * slot_h))
+        tile = fit(p, slot_w, img_h)
+        board.paste(tile, (x + i * slot_w, y + LH))
         tile.close()
         del tile
     gc.collect()
