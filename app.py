@@ -1,7 +1,7 @@
 """
 Flask Web App - ระบบสร้างบอร์ดชี้แจง
 """
-import os, uuid, shutil, threading
+import os, uuid, shutil, threading, time
 from flask import Flask, request, send_file, render_template, jsonify
 from board_builder import build_board
 
@@ -84,7 +84,7 @@ def generate():
         if not os.path.isdir(session_dir):
             return jsonify({"error": f"ไม่พบ session dir: {session_dir}"}), 404
 
-        jobs[upload_id] = {"status": "processing"}
+        jobs[upload_id] = {"status": "processing", "started": time.time()}
         t = threading.Thread(target=_run_build, args=(upload_id,), daemon=True)
         t.start()
 
@@ -102,7 +102,11 @@ def status(job_id):
         return jsonify({"status": "done", "url": f"/download/{job_id}"})
     if job["status"] == "error":
         return jsonify({"status": "error", "error": job.get("error", "ไม่ทราบสาเหตุ")})
-    return jsonify({"status": "processing"})
+    elapsed = int(time.time() - job.get("started", time.time()))
+    if elapsed > 300:  # 5 minute hard timeout
+        jobs[job_id] = {"status": "error", "error": "ใช้เวลานานเกินไป (timeout 5 นาที)"}
+        return jsonify({"status": "error", "error": "ใช้เวลานานเกินไป (timeout 5 นาที)"})
+    return jsonify({"status": "processing", "elapsed": elapsed})
 
 
 # ── Download ──────────────────────────────────────────────────────────────────

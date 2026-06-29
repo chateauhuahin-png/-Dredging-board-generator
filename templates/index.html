@@ -185,9 +185,13 @@ document.getElementById("boardForm").addEventListener("submit", async function(e
         } else {
           // still processing
           dots = (dots + 1) % 4;
-          const d = ".".repeat(dots + 1);
-          progressBar.style.width = Math.min(65 + dots * 8, 95) + "%";
-          statusEl.innerHTML = `<span class="spinner"></span>กำลังสร้างบอร์ด${d}`;
+          const elapsed = sData.elapsed || 0;
+          const mins = Math.floor(elapsed / 60);
+          const secs = elapsed % 60;
+          const timeStr = mins > 0 ? `${mins} นาที ${secs} วินาที` : `${secs} วินาที`;
+          const pct = Math.min(65 + (elapsed / 300) * 30, 95);
+          progressBar.style.width = pct.toFixed(0) + "%";
+          statusEl.innerHTML = `<span class="spinner"></span>กำลังสร้างบอร์ด... (${timeStr})`;
         }
       } catch (err) {
         // network hiccup — keep polling

@@ -56,7 +56,7 @@ def slide_to_png(pptx_path, slide_idx, work_dir):
                     **headers,
                     "Content-Type": "application/vnd.openxmlformats-officedocument.presentationml.presentation"
                 },
-                data=f, timeout=120
+                data=f, timeout=60
             )
         item    = resp.json()
         item_id = item.get("id")
@@ -69,7 +69,7 @@ def slide_to_png(pptx_path, slide_idx, work_dir):
             # 2. ดาวน์โหลดเป็น PDF (Microsoft ใช้ PowerPoint render จริง)
             pdf_resp = requests.get(
                 f"https://graph.microsoft.com/v1.0/me/drive/items/{item_id}/content?format=pdf",
-                headers=headers, allow_redirects=True, timeout=120
+                headers=headers, allow_redirects=True, timeout=60
             )
             log(f"[graph] pdf status={pdf_resp.status_code} size={len(pdf_resp.content)}")
             if pdf_resp.status_code != 200:
