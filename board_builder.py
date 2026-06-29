@@ -144,26 +144,78 @@ def extract_single_slide(pptx_path, slide_idx, work_dir):
 
 def render_map_slide(pptx_path, slide_idx, work_dir):
     """
-    Render map slide to JPG via Microsoft Graph API only.
-    If Graph API not configured or fails → return None → caller uses find_img instead.
-    LibreOffice removed: too slow/unreliable on cloud hosting.
+    Render map slide to JPG.
+    Priority 1: Microsoft Graph API (perfect quality)
+    Priority 2: PIL composite — paste all images at correct EMU positions (no text/shapes)
     """
+    import io as _io
+
+    # ── Priority 1: Graph API ─────────────────────────────────────────────
     try:
         from graph_convert import slide_to_png, is_configured
-        if not is_configured():
-            print("  Graph API not configured — using find_img fallback")
-            return None
-        print("  Using Microsoft Graph API...")
-        png = slide_to_png(pptx_path, slide_idx, work_dir)
-        if png:
-            jpg = os.path.join(work_dir, "map_slide.jpg")
-            Image.open(png).convert("RGB").save(jpg, "JPEG", quality=92)
-            print("  Graph API: success")
-            return jpg
-        print("  Graph API returned no output — using find_img fallback")
-        return None
+        if is_configured():
+            print("  Using Microsoft Graph API...")
+            png = slide_to_png(pptx_path, slide_idx, work_dir)
+            if png:
+                jpg = os.path.join(work_dir, "map_slide.jpg")
+                Image.open(png).convert("RGB").save(jpg, "JPEG", quality=95)
+                print("  Graph API: success")
+                return jpg
+            print("  Graph API: no output — falling back to PIL composite")
     except Exception as e:
-        print(f"  render_map_slide error: {e} — using find_img fallback")
+        print(f"  Graph API error: {e} — falling back to PIL composite")
+
+    # ── Priority 2: PIL composite (images only, correct positions) ────────
+    try:
+        print("  PIL composite render...")
+        prs  = Presentation(pptx_path)
+        slide = prs.slides[slide_idx - 1]
+        sw   = prs.slide_width
+        sh   = prs.slide_height
+        OUT_W = 2400
+        scale = OUT_W / sw
+        OUT_H = int(sh * scale)
+        base  = Image.new("RGB", (OUT_W, OUT_H), (255, 255, 255))
+
+        def paste_pics(shapes, ox=0, oy=0, sx=1.0, sy=1.0):
+            for s in shapes:
+                try:
+                    ax = ox + (s.left  or 0) * sx
+                    ay = oy + (s.top   or 0) * sy
+                    aw = (s.width  or 0) * sx
+                    ah = (s.height or 0) * sy
+                except Exception:
+                    continue
+                if s.shape_type == 13 and aw > 0 and ah > 0:
+                    try:
+                        px_, py_ = int(ax * scale), int(ay * scale)
+                        pw,  ph  = int(aw * scale), int(ah * scale)
+                        im = Image.open(_io.BytesIO(s.image.blob)).convert("RGBA")
+                        im = im.resize((pw, ph), Image.LANCZOS)
+                        bg = Image.new("RGB", (pw, ph), (255, 255, 255))
+                        bg.paste(im, mask=im.split()[3])
+                        base.paste(bg, (px_, py_))
+                        im.close(); bg.close()
+                        del im, bg
+                    except Exception as e:
+                        print(f"    pic paste: {e}")
+                elif s.shape_type == 6:
+                    paste_pics(s.shapes,
+                               ox + (s.left or 0) * sx,
+                               oy + (s.top  or 0) * sy,
+                               sx, sy)
+
+        paste_pics(slide.shapes)
+        del prs
+        gc.collect()
+
+        jpg = os.path.join(work_dir, "map_slide.jpg")
+        base.save(jpg, "JPEG", quality=95)
+        base.close()
+        print("  PIL composite: success")
+        return jpg
+    except Exception as e:
+        print(f"  PIL composite error: {e}")
         return None
 
 
@@ -360,17 +412,22 @@ def _parse_pptx_once(pptx_path, work_dir, med_dir):
             photo_after  = res.get("หลัง")
         del imgs
 
-    # ── extract media from key slides ─────────────────────────────────────
+    # ── extract media from key slides (sorted by X position = left→right) ──
     os.makedirs(med_dir, exist_ok=True)
     def _extract(shapes, prefix):
-        for j, shape in enumerate(shapes):
+        # Sort by left position so filenames reflect left→right order
+        pic_shapes = []
+        for shape in shapes:
             if shape.shape_type == 13:
-                img = shape.image
-                fname = f"{prefix}_{j}.{img.ext}"
-                with open(os.path.join(med_dir, fname), "wb") as f:
-                    f.write(img.blob)
+                pic_shapes.append(shape)
             elif shape.shape_type == 6:
-                _extract(shape.shapes, f"{prefix}g{j}")
+                _extract(shape.shapes, f"{prefix}g")
+        pic_shapes.sort(key=lambda s: (s.left or 0))
+        for j, shape in enumerate(pic_shapes):
+            img = shape.image
+            fname = f"{prefix}_{j:03d}.{img.ext}"
+            with open(os.path.join(med_dir, fname), "wb") as f:
+                f.write(img.blob)
 
     key_slides = list(set(s for s in [cfg["map"], cfg["letter1"], cfg["letter2"],
                                        cfg["surv"], cfg["des"], cfg["cross"],
