@@ -35,9 +35,7 @@
     font-size: 14px;
     margin-bottom: 32px;
   }
-  .form-group {
-    margin-bottom: 20px;
-  }
+  .form-group { margin-bottom: 20px; }
   label {
     display: block;
     font-weight: bold;
@@ -46,7 +44,6 @@
     font-size: 15px;
   }
   .required { color: #e53e3e; }
-  .optional { color: #888; font-weight: normal; font-size: 13px; }
   input[type="file"] {
     width: 100%;
     padding: 10px 12px;
@@ -94,10 +91,20 @@
     font-weight: bold;
     font-size: 16px;
   }
-  .divider {
-    border: none;
-    border-top: 1px solid #e2e8f0;
-    margin: 24px 0;
+  .progress-bar-wrap {
+    width: 100%;
+    background: #bee3f8;
+    border-radius: 6px;
+    height: 10px;
+    margin-top: 12px;
+    overflow: hidden;
+    display: none;
+  }
+  .progress-bar {
+    height: 100%;
+    background: #2b6cb0;
+    width: 0%;
+    transition: width 0.3s;
   }
   .spinner {
     display: inline-block;
@@ -118,37 +125,84 @@
   <p class="subtitle">นทพ. | ความละเอียด 150 DPI พร้อมพิมพ์ขนาด 120×80 cm</p>
 
   <form id="boardForm">
-
     <div class="form-group">
       <label>ไฟล์ PowerPoint <span class="required">*</span></label>
-      <input type="file" name="pptx" accept=".pptx" required>
+      <input type="file" id="pptxInput" accept=".pptx" required>
     </div>
-
-    <button type="submit" class="btn" id="submitBtn">
-      สร้างบอร์ดชี้แจง
-    </button>
+    <button type="submit" class="btn" id="submitBtn">สร้างบอร์ดชี้แจง</button>
   </form>
 
+  <div class="progress-bar-wrap" id="progressWrap">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
   <div class="status" id="status"></div>
 </div>
 
 <script>
+const CHUNK_SIZE = 5 * 1024 * 1024; // 5MB per chunk
+
 document.getElementById("boardForm").addEventListener("submit", async function(e) {
   e.preventDefault();
 
   const btn = document.getElementById("submitBtn");
   const statusEl = document.getElementById("status");
+  const progressWrap = document.getElementById("progressWrap");
+  const progressBar = document.getElementById("progressBar");
+  const file = document.getElementById("pptxInput").files[0];
+
+  if (!file) {
+    statusEl.className = "status error";
+    statusEl.innerHTML = "❌ กรุณาเลือกไฟล์ PPTX";
+    return;
+  }
 
   btn.disabled = true;
+  progressWrap.style.display = "block";
+  progressBar.style.width = "0%";
   statusEl.className = "status loading";
-  statusEl.innerHTML = '<span class="spinner"></span>กำลังสร้างบอร์ด... อาจใช้เวลา 1-2 นาที';
+  statusEl.innerHTML = '<span class="spinner"></span>กำลังอัปโหลดไฟล์...';
 
   try {
-    const formData = new FormData(this);
-    const res = await fetch("/generate", { method: "POST", body: formData });
-    const data = await res.json();
+    // Step 1: Start upload session
+    const startRes = await fetch("/upload/start", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ filename: file.name, size: file.size })
+    });
+    const { upload_id } = await startRes.json();
 
-    if (res.ok && data.url) {
+    // Step 2: Upload chunks
+    const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+    for (let i = 0; i < totalChunks; i++) {
+      const chunk = file.slice(i * CHUNK_SIZE, (i + 1) * CHUNK_SIZE);
+      const fd = new FormData();
+      fd.append("upload_id", upload_id);
+      fd.append("chunk_index", i);
+      fd.append("total_chunks", totalChunks);
+      fd.append("chunk", chunk);
+
+      const res = await fetch("/upload/chunk", { method: "POST", body: fd });
+      if (!res.ok) throw new Error("อัปโหลด chunk ล้มเหลว");
+
+      const pct = Math.round(((i + 1) / totalChunks) * 70);
+      progressBar.style.width = pct + "%";
+      statusEl.innerHTML = `<span class="spinner"></span>กำลังอัปโหลด... ${pct}%`;
+    }
+
+    // Step 3: Generate board
+    statusEl.innerHTML = '<span class="spinner"></span>กำลังสร้างบอร์ด... อาจใช้เวลา 1-2 นาที';
+    progressBar.style.width = "80%";
+
+    const genRes = await fetch("/generate", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({ upload_id })
+    });
+    const data = await genRes.json();
+
+    progressBar.style.width = "100%";
+
+    if (genRes.ok && data.url) {
       statusEl.className = "status success";
       statusEl.innerHTML = `✅ สร้างบอร์ดสำเร็จ!<br>
         <a class="download-btn" href="${data.url}">⬇️ ดาวน์โหลด JPG</a>`;
