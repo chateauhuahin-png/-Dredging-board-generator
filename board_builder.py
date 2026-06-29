@@ -340,11 +340,13 @@ def build_board(pptx_path, work_dir, output_path):
     extract_media(pptx_path, med_dir, list(set(key_slides)))
 
     # 3. Find image files for each section
-    def find_img(si, prefer_tall=False):
-        """Find best image for slide si"""
+    def find_img(si):
+        """Find best image for slide si — returns None if si is None or no image found"""
+        if si is None:
+            return None
         candidates = []
         for f in sorted(os.listdir(med_dir)):
-            if f.startswith(f"s{si:02d}_") and not f.startswith(f"s{si:02d}_g"):
+            if f.startswith(f"s{si:02d}_"):
                 p = os.path.join(med_dir, f)
                 try:
                     img = Image.open(p)
@@ -353,12 +355,13 @@ def build_board(pptx_path, work_dir, output_path):
                     pass
         if not candidates:
             return None
-        # Prefer largest image
         candidates.sort(key=lambda x: x[1][0]*x[1][1], reverse=True)
         return candidates[0][0]
 
     def find_boq_imgs(si):
-        """BOQ slide has 2 images: tall one = form, wide one = price"""
+        """BOQ slide has 2 images: tall one = ปร.6, wide one = ปร.4"""
+        if si is None:
+            return None, None
         candidates = []
         for f in sorted(os.listdir(med_dir)):
             if f.startswith(f"s{si:02d}_"):
@@ -368,18 +371,22 @@ def build_board(pptx_path, work_dir, output_path):
                     candidates.append((p, img.size[0], img.size[1]))
                 except Exception:
                     pass
+        if not candidates:
+            return None, None
         if len(candidates) < 2:
-            return (candidates[0][0] if candidates else None, None)
-        # Tall = boq form, wide = price table
+            return candidates[0][0], None
         tall = sorted(candidates, key=lambda x: x[2]/max(x[1],1), reverse=True)
         wide = sorted(candidates, key=lambda x: x[1]/max(x[2],1), reverse=True)
         return tall[0][0], wide[0][0]
 
     # 4. Render map slide
     print("Rendering map slide...")
-    map_jpg = render_map_slide(pptx_path, cfg["map"], work_dir)
-    if not map_jpg:
-        map_jpg = find_img(cfg["map"])
+    if cfg["map"]:
+        map_jpg = render_map_slide(pptx_path, cfg["map"], work_dir)
+        if not map_jpg:
+            map_jpg = find_img(cfg["map"])
+    else:
+        map_jpg = None
 
     # 5. Get title and agency name
     title1, title2, agency = get_title_from_pptx(pptx_path)
@@ -394,8 +401,7 @@ def build_board(pptx_path, work_dir, output_path):
     des_img   = find_img(cfg["des"])
     cross_img = find_img(cfg["cross"])
     vol_img   = find_img(cfg["vol"])
-    lett1_img = find_img(2)
-    lett2_img = find_img(3)
+    lett2_img = find_img(cfg["letter2"]) if cfg["letter2"] else None
 
     # 7. Build board
     board = Image.new("RGB", (W, H), NAVY)
