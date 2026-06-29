@@ -182,6 +182,11 @@ document.getElementById("boardForm").addEventListener("submit", async function(e
           statusEl.className = "status error";
           statusEl.innerHTML = `❌ เกิดข้อผิดพลาด: ${sData.error}`;
           btn.disabled = false;
+        } else if (sData.status === "not_found") {
+          clearInterval(poll);
+          statusEl.className = "status error";
+          statusEl.innerHTML = `❌ Server หยุดทำงานกลางคัน กรุณาลองใหม่อีกครั้ง`;
+          btn.disabled = false;
         } else {
           // still processing
           dots = (dots + 1) % 4;

@@ -1,7 +1,7 @@
 """
 Flask Web App - ระบบสร้างบอร์ดชี้แจง
 """
-import os, uuid, shutil, threading, time
+import os, uuid, shutil, threading, time, json
 from flask import Flask, request, send_file, render_template, jsonify
 from board_builder import build_board
 
@@ -10,11 +10,28 @@ app.config["MAX_CONTENT_LENGTH"] = 20 * 1024 * 1024  # 20MB per chunk
 
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "outputs")
+STATUS_DIR = os.path.join(os.path.dirname(__file__), "status")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(STATUS_DIR, exist_ok=True)
 
-# In-memory job status store
-jobs = {}  # job_id -> {"status": "processing"|"done"|"error", "error": str}
+
+def _status_path(job_id):
+    return os.path.join(STATUS_DIR, f"{job_id}.json")
+
+def _write_status(job_id, data):
+    with open(_status_path(job_id), "w") as f:
+        json.dump(data, f)
+
+def _read_status(job_id):
+    p = _status_path(job_id)
+    if not os.path.exists(p):
+        return None
+    try:
+        with open(p) as f:
+            return json.load(f)
+    except Exception:
+        return None
 
 
 @app.route("/")
@@ -56,7 +73,6 @@ def _run_build(upload_id):
     pptx_path   = os.path.join(session_dir, "input.pptx")
     output_path = os.path.join(OUTPUT_DIR, f"board_{upload_id}.jpg")
     try:
-        # Assemble chunks
         chunks = sorted(f for f in os.listdir(session_dir) if f.startswith("chunk_"))
         with open(pptx_path, "wb") as out:
             for c in chunks:
@@ -64,9 +80,9 @@ def _run_build(upload_id):
                     out.write(cf.read())
 
         build_board(pptx_path=pptx_path, work_dir=session_dir, output_path=output_path)
-        jobs[upload_id] = {"status": "done"}
+        _write_status(upload_id, {"status": "done"})
     except Exception as e:
-        jobs[upload_id] = {"status": "error", "error": str(e)}
+        _write_status(upload_id, {"status": "error", "error": str(e)})
     finally:
         shutil.rmtree(session_dir, ignore_errors=True)
 
@@ -84,7 +100,7 @@ def generate():
         if not os.path.isdir(session_dir):
             return jsonify({"error": f"ไม่พบ session dir: {session_dir}"}), 404
 
-        jobs[upload_id] = {"status": "processing", "started": time.time()}
+        _write_status(upload_id, {"status": "processing", "started": time.time()})
         t = threading.Thread(target=_run_build, args=(upload_id,), daemon=True)
         t.start()
 
@@ -95,16 +111,17 @@ def generate():
 
 @app.route("/status/<job_id>")
 def status(job_id):
-    job = jobs.get(job_id)
+    job = _read_status(job_id)
     if not job:
         return jsonify({"status": "not_found"}), 404
     if job["status"] == "done":
         return jsonify({"status": "done", "url": f"/download/{job_id}"})
     if job["status"] == "error":
         return jsonify({"status": "error", "error": job.get("error", "ไม่ทราบสาเหตุ")})
+    # processing
     elapsed = int(time.time() - job.get("started", time.time()))
-    if elapsed > 300:  # 5 minute hard timeout
-        jobs[job_id] = {"status": "error", "error": "ใช้เวลานานเกินไป (timeout 5 นาที)"}
+    if elapsed > 300:
+        _write_status(job_id, {"status": "error", "error": "ใช้เวลานานเกินไป (timeout 5 นาที)"})
         return jsonify({"status": "error", "error": "ใช้เวลานานเกินไป (timeout 5 นาที)"})
     return jsonify({"status": "processing", "elapsed": elapsed})
 

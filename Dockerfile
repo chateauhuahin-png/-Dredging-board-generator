@@ -22,7 +22,7 @@ RUN mkdir -p /usr/share/fonts/thai && \
     fc-cache -fv
 
 # Create upload/output directories
-RUN mkdir -p uploads outputs
+RUN mkdir -p uploads outputs status
 
 EXPOSE 8080
 
