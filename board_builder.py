@@ -587,9 +587,9 @@ def build_board(pptx_path, work_dir, output_path):
 
     boq_img, price_img = find_boq_imgs(cfg["boq"])
     surv_imgs  = find_all_imgs(cfg["surv"])    # ← หลายรูป
-    des_img    = find_img(cfg["des"])
+    des_imgs   = find_all_imgs(cfg["des"])
     cross_imgs = find_all_imgs(cfg["cross"])   # ← หลายรูป
-    vol_img    = find_img(cfg["vol"])
+    vol_imgs   = find_all_imgs(cfg["vol"])
     lett2_imgs = find_all_imgs(cfg["letter2"]) if cfg["letter2"] else []  # ← หลายรูป
 
     # 7. Build board
@@ -645,7 +645,7 @@ def build_board(pptx_path, work_dir, output_path):
     sy = CONY + map_h + GAP
     sh = int(CONH * 0.265)
     sec_multi(draw, board, "ตารางการสำรวจ",    surv_imgs, XM, sy,          CM, sh)
-    sec(draw, board, "ตารางการออกแบบ",         des_img,   XM, sy+sh+GAP,   CM, CONH-map_h-GAP-sh-GAP)
+    sec_multi(draw, board, "ตารางการออกแบบ",    des_imgs,  XM, sy+sh+GAP,   CM, CONH-map_h-GAP-sh-GAP)
 
     # Right column
     ch = int(CONH * 0.375)
@@ -656,7 +656,7 @@ def build_board(pptx_path, work_dir, output_path):
     sec_multi(draw, board, "หนังสือตรวจสอบความซ้ำซ้อน", lett2_imgs, XR, ly, CR, lh, lsz=66)
 
     vy = ly + lh + GAP
-    sec(draw, board, "ตารางคำนวณปริมาตรดินตะกอน", vol_img, XR, vy, CR, CONH-ch-GAP-lh-GAP)
+    sec_multi(draw, board, "ตารางคำนวณปริมาตรดินตะกอน", vol_imgs, XR, vy, CR, CONH-ch-GAP-lh-GAP)
 
     # Photo strip
     phy = CONY + CONH + GAP
