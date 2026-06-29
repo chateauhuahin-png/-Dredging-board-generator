@@ -1,7 +1,7 @@
 """
 Board Builder - สร้างบอร์ดชี้แจงจาก PPTX + รูปภาพ
 """
-import os, subprocess, copy
+import os, copy
 from PIL import Image, ImageDraw, ImageFont, ImageFile
 from pptx import Presentation
 
@@ -115,120 +115,27 @@ def extract_single_slide(pptx_path, slide_idx, work_dir):
 
 def render_map_slide(pptx_path, slide_idx, work_dir):
     """
-    Render map slide to JPG.
-    Priority 1: Microsoft Graph API (PowerPoint renderer — perfect quality)
-    Priority 2: LibreOffice composite render (fallback)
+    Render map slide to JPG via Microsoft Graph API only.
+    If Graph API not configured or fails → return None → caller uses find_img instead.
+    LibreOffice removed: too slow/unreliable on cloud hosting.
     """
-    import io as _io
-
-    # ── Priority 1: Microsoft Graph API ──────────────────────────────────────
     try:
         from graph_convert import slide_to_png, is_configured
-        if is_configured():
-            print("  Using Microsoft Graph API...")
-            png = slide_to_png(pptx_path, slide_idx, work_dir)
-            if png:
-                jpg = os.path.join(work_dir, "map_slide.jpg")
-                Image.open(png).convert("RGB").save(jpg, "JPEG", quality=92)
-                print("  Graph API: success")
-                return jpg
-            print("  Graph API: no output, falling back to LibreOffice")
-    except Exception as e:
-        print(f"  Graph API error: {e}, falling back to LibreOffice")
-
-    # ── Priority 2: LibreOffice composite render (only if Graph API available) ──
-    # Skip LibreOffice if Graph API is not configured — it's too slow on cloud
-    try:
-        from graph_convert import is_configured as _gc
-        if not _gc():
-            print("  Graph API not configured — skipping LibreOffice, using find_img fallback")
+        if not is_configured():
+            print("  Graph API not configured — using find_img fallback")
             return None
-    except Exception:
+        print("  Using Microsoft Graph API...")
+        png = slide_to_png(pptx_path, slide_idx, work_dir)
+        if png:
+            jpg = os.path.join(work_dir, "map_slide.jpg")
+            Image.open(png).convert("RGB").save(jpg, "JPEG", quality=92)
+            print("  Graph API: success")
+            return jpg
+        print("  Graph API returned no output — using find_img fallback")
         return None
-
-    try:
-        single_pptx, sw, sh = extract_single_slide(pptx_path, slide_idx, work_dir)
     except Exception as e:
-        print(f"  extract_single_slide error: {e}")
+        print(f"  render_map_slide error: {e} — using find_img fallback")
         return None
-
-    OUT_W = 1800
-    scale = OUT_W / sw
-    OUT_H = int(sh * scale)
-
-    # ── Step 1: PPTX → ODP → PNG ──────────────────────────────────────────────
-    try:
-        subprocess.run(
-            ["soffice", "--headless", "--convert-to", "odp", single_pptx, "--outdir", work_dir],
-            capture_output=True, timeout=180
-        )
-    except Exception as e:
-        print(f"  LibreOffice PPTX→ODP error: {e}")
-        return None
-
-    odp_path = os.path.join(work_dir, "map_single.odp")
-    render_src = odp_path if os.path.exists(odp_path) else single_pptx
-
-    try:
-        subprocess.run(
-            ["soffice", "--headless", "--convert-to", "png", render_src, "--outdir", work_dir],
-            capture_output=True, timeout=180
-        )
-    except Exception as e:
-        print(f"  LibreOffice ODP→PNG error: {e}")
-        return None
-    lo_png = os.path.join(work_dir, "map_single.png")
-    if os.path.exists(lo_png):
-        base = Image.open(lo_png).convert("RGB").resize((OUT_W, OUT_H), Image.LANCZOS)
-    else:
-        base = Image.new("RGB", (OUT_W, OUT_H), (255, 255, 255))
-
-    # ── Step 2: PIL pastes images at correct EMU positions on top ──────────
-    prs   = Presentation(single_pptx)
-    slide = prs.slides[0]
-
-    def grp_transform(grp):
-        try:
-            xfrm = grp._element.grpSpPr.xfrm
-            co, ce = xfrm.chOff, xfrm.chExt
-            cox = co.x if co else 0;  coy = co.y if co else 0
-            cex = ce.cx if ce else (grp.width or 1)
-            cey = ce.cy if ce else (grp.height or 1)
-            return cox, coy, (grp.width or cex)/cex, (grp.height or cey)/cey
-        except Exception:
-            return 0, 0, 1.0, 1.0
-
-    def paste_pics(shapes, ox=0, oy=0, sx=1.0, sy=1.0, cox=0, coy=0):
-        for s in shapes:
-            try:
-                ax = ox + ((s.left  or 0) - cox) * sx
-                ay = oy + ((s.top   or 0) - coy) * sy
-                aw = (s.width  or 0) * sx
-                ah = (s.height or 0) * sy
-            except Exception:
-                continue
-            px_, py_ = int(ax*scale), int(ay*scale)
-            pw,  ph  = int(aw*scale), int(ah*scale)
-            if s.shape_type == 13 and pw > 0 and ph > 0:
-                try:
-                    im = Image.open(_io.BytesIO(s.image.blob)).convert("RGBA")
-                    im = im.resize((pw, ph), Image.LANCZOS)
-                    bg = Image.new("RGB", (pw, ph), (255, 255, 255))
-                    bg.paste(im, mask=im.split()[3])
-                    base.paste(bg, (px_, py_))
-                    del im, bg
-                except Exception as e:
-                    print(f"  pic: {e}")
-            elif s.shape_type == 6:
-                c_cox, c_coy, gsx, gsy = grp_transform(s)
-                paste_pics(s.shapes, ax, ay, sx*gsx, sy*gsy, c_cox, c_coy)
-
-    paste_pics(slide.shapes)
-    del prs
-
-    jpg = os.path.join(work_dir, "map_slide.jpg")
-    base.save(jpg, "JPEG", quality=92)
-    return jpg
 
 
 def get_title_from_pptx(pptx_path):
