@@ -106,7 +106,7 @@ def _parse_pptx_once(pptx_path, work_dir, med_dir):
     cfg = {"map": None, "surv": None, "des": None, "cross": None,
            "vol": None, "boq": None, "letter1": None, "letter2": None}
     keywords = {
-        "50,000": "map", "หนังสือขอรับการสนับสนุน": "letter1",
+        "แผนที่": "map", "หนังสือขอรับการสนับสนุน": "letter1",
         "ซ้ำซ้อน": "letter2", "ตารางการสำรวจ": "surv",
         "ตารางการออกแบบ": "des", "รูปตัดตามขวาง": "cross",
         "ตารางคำนวณปริมาตร": "vol", "แบบสรุปราคา": "boq",
