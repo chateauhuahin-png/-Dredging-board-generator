@@ -17,6 +17,7 @@ NAVY   = (11, 20, 100)
 GOLD   = (255, 215, 0)
 WHITE  = (255, 255, 255)
 MG, GAP = 120, 36
+BW      = 6          # border width (pixels) สำหรับกรอบทุก section
 UW = W - 2*MG
 UH = H - 2*MG
 HDR  = 400
@@ -53,41 +54,50 @@ def fit(path, w, h, bg=WHITE):
 
 
 def sec(draw, board, label, img_path, x, y, w, h, lsz=76):
+    """Section เดี่ยว — white background box + navy border"""
+    # พื้นขาว
+    draw.rectangle([x, y, x+w, y+h], fill=WHITE)
+    # Header bar สีน้ำเงิน
     draw.rectangle([x, y, x+w, y+LH], fill=NAVY)
     f = fnt(lsz, bold=True)
     bb = draw.textbbox((0, 0), label, font=f)
     draw.text((x + (w-(bb[2]-bb[0]))//2, y + (LH-(bb[3]-bb[1]))//2),
               label, font=f, fill=GOLD)
+    # รูปภาพ
     if img_path and os.path.exists(img_path):
         tile = fit(img_path, w, h - LH)
         board.paste(tile, (x, y + LH))
         tile.close()
         del tile
         gc.collect()
-    else:
-        draw.rectangle([x, y+LH, x+w, y+h], fill=WHITE)
+    # กรอบน้ำเงินทับบนสุด
+    draw.rectangle([x, y, x+w, y+h], outline=NAVY, width=BW)
 
 
 def sec_multi(draw, board, label, img_paths, x, y, w, h, lsz=76):
-    """Section with multiple images arranged left to right"""
+    """Section หลายรูป เรียงซ้าย→ขวา — white background box + navy border"""
+    # พื้นขาว
+    draw.rectangle([x, y, x+w, y+h], fill=WHITE)
+    # Header bar สีน้ำเงิน
     draw.rectangle([x, y, x+w, y+LH], fill=NAVY)
     f = fnt(lsz, bold=True)
     bb = draw.textbbox((0, 0), label, font=f)
     draw.text((x + (w-(bb[2]-bb[0]))//2, y + (LH-(bb[3]-bb[1]))//2),
               label, font=f, fill=GOLD)
+    # รูปภาพหลายรูป
     valid = [p for p in img_paths if p and os.path.exists(p)]
-    if not valid:
-        draw.rectangle([x, y+LH, x+w, y+h], fill=WHITE)
-        return
-    n = len(valid)
-    slot_w = w // n
-    img_h  = h - LH
-    for i, p in enumerate(valid):
-        tile = fit(p, slot_w, img_h)
-        board.paste(tile, (x + i * slot_w, y + LH))
-        tile.close()
-        del tile
-    gc.collect()
+    if valid:
+        n      = len(valid)
+        slot_w = w // n
+        img_h  = h - LH
+        for i, p in enumerate(valid):
+            tile = fit(p, slot_w, img_h)
+            board.paste(tile, (x + i * slot_w, y + LH))
+            tile.close()
+            del tile
+        gc.collect()
+    # กรอบน้ำเงินทับบนสุด
+    draw.rectangle([x, y, x+w, y+h], outline=NAVY, width=BW)
 
 
 def _parse_pptx_once(pptx_path, work_dir, med_dir):
@@ -214,7 +224,6 @@ def build_board(pptx_path, work_dir, output_path):
 
     # ── 2. Find image files for each section ──────────────────────────────
     def find_img(si):
-        """Find best (largest) image for slide si"""
         if si is None:
             return None
         candidates = []
@@ -233,7 +242,6 @@ def build_board(pptx_path, work_dir, output_path):
         return candidates[0][0]
 
     def find_all_imgs(si):
-        """Find ALL images for slide si sorted by filename (= X position left→right)"""
         if si is None:
             return []
         candidates = []
@@ -245,7 +253,6 @@ def build_board(pptx_path, work_dir, output_path):
         return candidates
 
     def find_boq_imgs(si):
-        """BOQ slide: tall = ปร.6, wide = ปร.4"""
         if si is None:
             return None, None
         candidates = []
@@ -266,10 +273,9 @@ def build_board(pptx_path, work_dir, output_path):
         wide = sorted(candidates, key=lambda x: x[1]/max(x[2],1), reverse=True)
         return tall[0][0], wide[0][0]
 
-    # ── 3. Map: ผู้ใช้ paste as picture แล้ว — ดึงรูปภาพตรงๆ ─────────────
+    # ── 3. Map ────────────────────────────────────────────────────────────
     map_jpg = find_img(cfg["map"])
     print(f"Map image: {map_jpg}")
-
     print(f"Title: {title1} / {title2} / Agency: {agency}")
 
     boq_img, price_img = find_boq_imgs(cfg["boq"])
@@ -283,7 +289,7 @@ def build_board(pptx_path, work_dir, output_path):
     board = Image.new("RGB", (W, H), NAVY)
     draw  = ImageDraw.Draw(board)
 
-    # Header
+    # ── Header ────────────────────────────────────────────────────────────
     draw.rectangle([MG, MG, W-MG, MG+HDR], fill=NAVY)
     logo_sz = 680
 
@@ -321,12 +327,12 @@ def build_board(pptx_path, work_dir, output_path):
     draw.text((cx-(bb1[2]-bb1[0])//2, MG+45),  title1, font=f1, fill=GOLD)
     draw.text((cx-(bb2[2]-bb2[0])//2, MG+205), title2, font=f2, fill=WHITE)
 
-    # Left column
+    # ── Left column ───────────────────────────────────────────────────────
     boq_h = int(CONH * 0.54)
     sec(draw, board, "ประมาณการ (ปร.6)", boq_img,   XL, CONY, CL, boq_h)
     sec(draw, board, "ประมาณการ (ปร.4)", price_img, XL, CONY+boq_h+GAP, CL, CONH-boq_h-GAP)
 
-    # Middle column
+    # ── Middle column ─────────────────────────────────────────────────────
     map_h = int(CONH * 0.50)
     sec(draw, board, "แผนที่และจุดดำเนินการ (มาตราส่วน 1:50,000)",
         map_jpg, XM, CONY, CM, map_h, lsz=68)
@@ -335,7 +341,7 @@ def build_board(pptx_path, work_dir, output_path):
     sec_multi(draw, board, "ตารางการสำรวจ",  surv_imgs, XM, sy,        CM, sh)
     sec_multi(draw, board, "ตารางการออกแบบ", des_imgs,  XM, sy+sh+GAP, CM, CONH-map_h-GAP-sh-GAP)
 
-    # Right column
+    # ── Right column ──────────────────────────────────────────────────────
     ch = int(CONH * 0.375)
     sec_multi(draw, board, "รูปตัดตามขวางขุดลอกลำน้ำ", cross_imgs, XR, CONY, CR, ch)
     ly = CONY + ch + GAP
@@ -344,7 +350,7 @@ def build_board(pptx_path, work_dir, output_path):
     vy = ly + lh + GAP
     sec_multi(draw, board, "ตารางคำนวณปริมาตรดินตะกอน", vol_imgs, XR, vy, CR, CONH-ch-GAP-lh-GAP)
 
-    # Photo strip
+    # ── Photo strip (3 sections) ──────────────────────────────────────────
     phy = CONY + CONH + GAP
     PW  = (UW - 2*GAP) // 3
     for idx, (lbl, ph) in enumerate(zip(
@@ -352,13 +358,19 @@ def build_board(pptx_path, work_dir, output_path):
         [photo_before, photo_during, photo_after]
     )):
         px = XL + idx * (PW + GAP)
+        # พื้นขาว
+        draw.rectangle([px, phy, px+PW, phy+PHH], fill=WHITE)
+        # Header bar
         draw.rectangle([px, phy, px+PW, phy+LH], fill=NAVY)
         fp = fnt(84, True)
         bbl = draw.textbbox((0,0), lbl, font=fp)
         draw.text((px+(PW-(bbl[2]-bbl[0]))//2, phy+(LH-(bbl[3]-bbl[1]))//2),
                   lbl, font=fp, fill=GOLD)
+        # รูปภาพ
         if ph and os.path.exists(ph):
             board.paste(fit(ph, PW, PHH-LH), (px, phy+LH))
+        # กรอบน้ำเงิน
+        draw.rectangle([px, phy, px+PW, phy+PHH], outline=NAVY, width=BW)
 
     board.save(output_path, "JPEG", quality=95, dpi=(150, 150))
     print(f"Saved: {output_path}")
