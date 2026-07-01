@@ -11,9 +11,11 @@
     background: #0b1464;
     min-height: 100vh;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
     padding: 20px;
+    gap: 0;
   }
   .card {
     background: white;
@@ -71,31 +73,33 @@
   }
   @keyframes spin { to { transform: rotate(360deg); } }
 
-  /* ── Gear animation ─────────────────────────────────────── */
-  .gear-wrap {
+  /* ── Gear animation (outside card, on navy background) ── */
+  .gear-outer {
     display: none;
-    background: #0b1464;
-    border-radius: 10px;
-    margin-top: 20px;
-    padding: 24px 16px 16px;
-    text-align: center;
+    flex-direction: column;
+    align-items: center;
+    margin-top: 28px;
+    width: 100%;
+    max-width: 600px;
   }
-  .gear-wrap.active { display: block; }
-  .gear-wrap svg { display: block; margin: 0 auto; }
+  .gear-outer.active { display: flex; }
   .gear-label {
     color: #ffd700;
-    font-size: 15px;
-    margin-top: 10px;
+    font-size: 16px;
+    margin-top: 12px;
     letter-spacing: 0.5px;
+    text-align: center;
   }
   .gear-elapsed {
-    color: rgba(255,255,255,0.65);
+    color: rgba(255,255,255,0.6);
     font-size: 13px;
     margin-top: 4px;
+    text-align: center;
   }
 </style>
 </head>
 <body>
+
 <div class="card">
   <h1>🗂️ ระบบสร้างบอร์ดชี้แจง</h1>
   <p class="subtitle">นทพ. | ความละเอียด 150 DPI พร้อมพิมพ์ขนาด 120×80 cm</p>
@@ -111,33 +115,32 @@
   <div class="progress-wrap" id="progressWrap">
     <div class="progress-bar" id="progressBar"></div>
   </div>
-
-  <!-- Gear animation -->
-  <div class="gear-wrap" id="gearWrap">
-    <svg id="gearSvg" viewBox="0 0 210 120" width="210" height="120"></svg>
-    <div class="gear-label" id="gearLabel">กำลังสร้างบอร์ดชี้แจง...</div>
-    <div class="gear-elapsed" id="gearElapsed"></div>
-  </div>
-
   <div class="status" id="status"></div>
+</div>
+
+<!-- Gear animation — outside the card, on the blue background -->
+<div class="gear-outer" id="gearOuter">
+  <svg id="gearSvg" viewBox="0 0 240 150" width="240" height="150"></svg>
+  <div class="gear-label" id="gearLabel">กำลังอัปโหลดไฟล์...</div>
+  <div class="gear-elapsed" id="gearElapsed"></div>
 </div>
 
 <script>
 const CHUNK_SIZE = 5 * 1024 * 1024;
 
-/* ── Gear drawing & animation ────────────────────────────────── */
+/* ── Gear drawing & animation ─────────────────────────────────────── */
 (function initGears() {
-  const svg = document.getElementById('gearSvg');
-  const GOLD = '#ffd700';
-  const NAVY = '#0b1464';
+  const svg   = document.getElementById('gearSvg');
+  const GOLD  = '#ffd700';
+  const DARK  = '#060e4a';  // dark navy for hub hole
 
   function gearPath(Ro, Ri, n, ratio) {
     const step = (2 * Math.PI) / n;
-    const th = step * ratio / 2;
-    const ch = th * 0.14;
+    const th   = step * ratio / 2;
+    const ch   = th * 0.13;
     let d = '';
     for (let i = 0; i < n; i++) {
-      const a = (i / n) * 2 * Math.PI;
+      const a   = (i / n) * 2 * Math.PI;
       const pts = [
         [Ri * Math.cos(a - th - ch), Ri * Math.sin(a - th - ch)],
         [Ro * Math.cos(a - th + ch), Ro * Math.sin(a - th + ch)],
@@ -150,60 +153,51 @@ const CHUNK_SIZE = 5 * 1024 * 1024;
     return d + 'Z';
   }
 
-  function makeSVGEl(tag, attrs) {
-    const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
-    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, v);
-    return el;
+  function el(tag, attrs) {
+    const e = document.createElementNS('http://www.w3.org/2000/svg', tag);
+    for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+    return e;
   }
 
   function buildGear(cx, cy, Ro, Ri, hub, n, ratio) {
-    const g = makeSVGEl('g', {});
-    g.appendChild(makeSVGEl('path', { d: gearPath(Ro, Ri, n, ratio), fill: GOLD }));
-    g.appendChild(makeSVGEl('circle', { cx: 0, cy: 0, r: hub, fill: GOLD }));
-    g.appendChild(makeSVGEl('circle', { cx: 0, cy: 0, r: hub * 0.38, fill: NAVY }));
-    g.dataset.cx = cx; g.dataset.cy = cy;
+    const g = el('g', {});
+    g.appendChild(el('path',   { d: gearPath(Ro, Ri, n, ratio), fill: GOLD }));
+    g.appendChild(el('circle', { cx: 0, cy: 0, r: hub,           fill: GOLD }));
+    g.appendChild(el('circle', { cx: 0, cy: 0, r: hub * 0.4,     fill: DARK }));
+    g._cx = cx; g._cy = cy;
     svg.appendChild(g);
     return g;
   }
 
-  // Large gear: 8 teeth, center (68, 60)
-  // Small gear: 5 teeth, center (136, 60)  → distance 68 ≈ pitchR_large(42) + pitchR_small(27)
-  const lgear = buildGear(68, 60, 48, 36, 14, 8, 0.44);
-  const sgear = buildGear(136, 60, 30, 23,  9, 5, 0.44);
+  // Large gear 8 teeth centered at (78, 75)
+  // Small gear 5 teeth centered at (158, 75)  — distance 80 ≈ pitchR1(42)+pitchR2(27)
+  const lg = buildGear(78,  75, 52, 39, 15, 8, 0.44);
+  const sg = buildGear(158, 75, 33, 25,  9, 5, 0.44);
 
   let angle = 0;
   let rafId = null;
-  const SPEED = 0.6; // degrees per frame (~36 rpm)
+  const DEG_PER_FRAME = 0.55;
 
   function tick() {
-    angle = (angle + SPEED) % 360;
-    // Large CW, small CCW at ratio 8/5
-    lgear.setAttribute('transform',
-      `translate(68,60) rotate(${angle})`);
-    sgear.setAttribute('transform',
-      `translate(136,60) rotate(${-(angle * 8 / 5)})`);
+    angle = (angle + DEG_PER_FRAME) % 360;
+    lg.setAttribute('transform', `translate(78,75) rotate(${angle})`);
+    sg.setAttribute('transform', `translate(158,75) rotate(${-(angle * 8 / 5)})`);
     rafId = requestAnimationFrame(tick);
   }
 
   window.startGears = function() {
-    document.getElementById('gearWrap').classList.add('active');
+    document.getElementById('gearOuter').classList.add('active');
     if (!rafId) tick();
   };
-
   window.stopGears = function() {
     if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
-    document.getElementById('gearWrap').classList.remove('active');
+    document.getElementById('gearOuter').classList.remove('active');
   };
-
-  window.setGearLabel = function(txt) {
-    document.getElementById('gearLabel').textContent = txt;
-  };
-  window.setGearElapsed = function(txt) {
-    document.getElementById('gearElapsed').textContent = txt;
-  };
+  window.setGearLabel   = t => { document.getElementById('gearLabel').textContent   = t; };
+  window.setGearElapsed = t => { document.getElementById('gearElapsed').textContent = t; };
 })();
 
-/* ── Main form logic ─────────────────────────────────────────── */
+/* ── Main form ────────────────────────────────────────────────────── */
 document.getElementById("boardForm").addEventListener("submit", async function(e) {
   e.preventDefault();
 
@@ -220,11 +214,14 @@ document.getElementById("boardForm").addEventListener("submit", async function(e
   }
 
   btn.disabled = true;
+  statusEl.style.display = "none";
   progressWrap.style.display = "block";
   progressBar.style.width = "0%";
-  statusEl.className = "status loading";
-  statusEl.style.display = "block";
-  statusEl.innerHTML = '<span class="spinner"></span>กำลังเริ่มต้น...';
+
+  // ── เริ่มหมุนตั้งแต่ช่วงอัปโหลด ──
+  startGears();
+  setGearLabel("กำลังอัปโหลดไฟล์...");
+  setGearElapsed("");
 
   try {
     // 1. Start upload session
@@ -250,14 +247,13 @@ document.getElementById("boardForm").addEventListener("submit", async function(e
 
       const pct = Math.round(((i + 1) / totalChunks) * 60);
       progressBar.style.width = pct + "%";
-      statusEl.innerHTML = `<span class="spinner"></span>กำลังอัปโหลด... ${pct}%`;
+      setGearLabel(`กำลังอัปโหลดไฟล์... ${pct}%`);
     }
 
     // 3. Start generating
     progressBar.style.width = "65%";
-    statusEl.style.display = "none";
-    startGears();
     setGearLabel("กำลังสร้างบอร์ดชี้แจง...");
+    setGearElapsed("");
 
     const genRes = await fetch("/generate", {
       method: "POST",
@@ -276,10 +272,10 @@ document.getElementById("boardForm").addEventListener("submit", async function(e
 
     const job_id = genData.job_id;
 
-    // 4. Poll status every 3 seconds
+    // 4. Poll status
     const poll = setInterval(async () => {
       try {
-        const sRes = await fetch(`/status/${job_id}`);
+        const sRes  = await fetch(`/status/${job_id}`);
         const sData = await sRes.json();
 
         if (sData.status === "done") {
@@ -309,18 +305,15 @@ document.getElementById("boardForm").addEventListener("submit", async function(e
           btn.disabled = false;
 
         } else {
-          // still processing — update elapsed
-          const elapsed = sData.elapsed || 0;
-          const mins = Math.floor(elapsed / 60);
-          const secs = elapsed % 60;
-          const timeStr = mins > 0 ? `${mins} นาที ${secs} วินาที` : `${secs} วินาที`;
-          const pct = Math.min(65 + (elapsed / 300) * 30, 95);
+          const elapsed  = sData.elapsed || 0;
+          const mins     = Math.floor(elapsed / 60);
+          const secs     = elapsed % 60;
+          const timeStr  = mins > 0 ? `${mins} นาที ${secs} วินาที` : `${secs} วินาที`;
+          const pct      = Math.min(65 + (elapsed / 300) * 30, 95);
           progressBar.style.width = pct.toFixed(0) + "%";
           setGearElapsed(`ผ่านไป ${timeStr}`);
         }
-      } catch (err) {
-        // network hiccup — keep polling
-      }
+      } catch (_) { /* network hiccup — keep polling */ }
     }, 3000);
 
   } catch (err) {
