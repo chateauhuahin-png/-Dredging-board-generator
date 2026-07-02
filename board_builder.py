@@ -115,26 +115,17 @@ def _parse_pptx_once(pptx_path, work_dir, med_dir):
     prs = Presentation(pptx_path)
 
     cfg = {"map": None, "surv": None, "des": None, "cross": None,
-           "vol": None, "boq": None, "letter1": None, "letter2": None}
-    keywords = {
-        "map": "map", "letter1": "letter1",
-        "cross": "cross",
-    }
-    kw_map = {
-        "map":     "map",
-        "letter1": "letter1",
-        "cross":   "cross",
-    }
+           "vol": None, "pr6": None, "pr4": None, "letter2": None}
 
     kw_detect = {
-        "แผนที่":                    "map",
-        "หนังสือขอรับการสนับสนุน":  "letter1",
-        "ซ้ำซ้อน":                   "letter2",
-        "ตารางการสำรวจ":             "surv",
-        "ตารางการออกแบบ":            "des",
-        "รูปตัดตามขวาง":             "cross",
-        "ตารางคำนวณปริมาตร":         "vol",
-        "แบบสรุปราคา":               "boq",
+        "แผนที่":            "map",
+        "ซ้ำซ้อน":           "letter2",
+        "ตารางการสำรวจ":     "surv",
+        "ตารางการออกแบบ":    "des",
+        "รูปตัดตามขวาง":     "cross",
+        "ตารางคำนวณปริมาตร": "vol",
+        "แบบสรุป":           "pr6",
+        "แบบประเมิน":        "pr4",
     }
 
     title1, title2, agency = "งานขุดลอกลำน้ำ", "", ""
@@ -209,9 +200,9 @@ def _parse_pptx_once(pptx_path, work_dir, med_dir):
             with open(os.path.join(med_dir, fname), "wb") as f:
                 f.write(img.blob)
 
-    key_slides = list(set(s for s in [cfg["map"], cfg["letter1"], cfg["letter2"],
+    key_slides = list(set(s for s in [cfg["map"], cfg["letter2"],
                                        cfg["surv"], cfg["des"], cfg["cross"],
-                                       cfg["vol"], cfg["boq"]] if s))
+                                       cfg["vol"], cfg["pr6"], cfg["pr4"]] if s))
     for si in key_slides:
         _extract(prs.slides[si-1].shapes, f"s{si:02d}")
 
@@ -259,29 +250,9 @@ def build_board(pptx_path, work_dir, output_path):
                     candidates.append(p)
         return candidates
 
-    def find_boq_imgs(si):
-        if si is None:
-            return None, None
-        candidates = []
-        for f in sorted(os.listdir(med_dir)):
-            if f.startswith(f"s{si:02d}_"):
-                p = os.path.join(med_dir, f)
-                try:
-                    img = Image.open(p)
-                    candidates.append((p, img.size[0], img.size[1]))
-                    img.close()
-                except Exception:
-                    pass
-        if not candidates:
-            return None, None
-        if len(candidates) < 2:
-            return candidates[0][0], None
-        tall = sorted(candidates, key=lambda x: x[2]/max(x[1],1), reverse=True)
-        wide = sorted(candidates, key=lambda x: x[1]/max(x[2],1), reverse=True)
-        return tall[0][0], wide[0][0]
-
     map_jpg    = find_img(cfg["map"])
-    boq_img, price_img = find_boq_imgs(cfg["boq"])
+    pr6_img    = find_img(cfg["pr6"])
+    pr4_img    = find_img(cfg["pr4"])
     surv_imgs  = find_all_imgs(cfg["surv"])
     des_imgs   = find_all_imgs(cfg["des"])
     cross_imgs = find_all_imgs(cfg["cross"])
@@ -326,8 +297,8 @@ def build_board(pptx_path, work_dir, output_path):
     draw.text((cx-(bb2[2]-bb2[0])//2, MG+205), title2, font=f2, fill=WHITE)
 
     boq_h = int(CONH * 0.54)
-    sec(draw, board, "ประมาณการ (ปร.6)", boq_img,   XL, CONY, CL, boq_h)
-    sec(draw, board, "ประมาณการ (ปร.4)", price_img, XL, CONY+boq_h+GAP, CL, CONH-boq_h-GAP)
+    sec(draw, board, "ประมาณการ (ปร.6)", pr6_img, XL, CONY, CL, boq_h)
+    sec(draw, board, "ประมาณการ (ปร.4)", pr4_img, XL, CONY+boq_h+GAP, CL, CONH-boq_h-GAP)
 
     map_h = int(CONH * 0.50)
     sec(draw, board, "แผนที่และจุดดำเนินการ (มาตราส่วน 1:50,000)",
